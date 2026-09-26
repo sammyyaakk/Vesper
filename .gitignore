@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment files: real secrets stay local, *.env.example is committed instead
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+.vercel/
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
