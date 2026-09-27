@@ -1,19 +1,9 @@
-import type { Prisma, Priority, TaskStatus, TaskType } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
+import type { CreateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
 import { requireProjectLead } from "./authorization.js";
-
-export interface CreateTaskInput {
-    projectId: string;
-    title: string;
-    description?: string;
-    type?: TaskType;
-    status?: TaskStatus;
-    priority?: Priority;
-    assigneeId?: string | null;
-    dueDate: string;
-}
 
 export const create = async (userId: string, input: CreateTaskInput, origin?: string) => {
     const { projectId, title, description, type, status, priority, assigneeId, dueDate } = input;
@@ -30,9 +20,9 @@ export const create = async (userId: string, input: CreateTaskInput, origin?: st
             description,
             type,
             priority,
-            assigneeId: assigneeId || null,
+            assigneeId: assigneeId ?? null,
             status,
-            dueDate: new Date(dueDate),
+            dueDate,
         },
     });
 

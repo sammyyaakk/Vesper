@@ -1,28 +1,7 @@
-import type { Priority, ProjectStatus } from "@prisma/client";
 import prisma from "../configs/prisma.js";
+import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
 import { hasWorkspaceRole, requireProjectLead, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
-
-interface ProjectFields {
-    workspaceId: string;
-    name: string;
-    description?: string;
-    status?: ProjectStatus;
-    priority?: Priority;
-    startDate?: string;
-    endDate?: string;
-}
-
-export interface CreateProjectInput extends ProjectFields {
-    teamLeadEmail: string;
-    teamMembers?: string[];
-}
-
-export interface UpdateProjectInput extends ProjectFields {
-    id: string;
-}
-
-const toDate = (value?: string) => (value ? new Date(value) : null);
 
 export const create = async (userId: string, input: CreateProjectInput) => {
     const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
@@ -34,10 +13,8 @@ export const create = async (userId: string, input: CreateProjectInput) => {
         AppError.forbidden("You don't have permission to create projects in this workspace"),
     );
 
-    const teamLead = await prisma.user.findUnique({
-        where: { email: teamLeadEmail },
-        select: { id: true },
-    });
+    const teamLead = workspace.members.find((member) => member.user.email === teamLeadEmail);
+    if (!teamLead) throw AppError.badRequest("Team lead must be a member of this workspace");
 
     const project = await prisma.project.create({
         data: {
@@ -46,10 +23,9 @@ export const create = async (userId: string, input: CreateProjectInput) => {
             description,
             status,
             priority,
-            // TODO(phase-2) #6: validate team_lead
-            teamLead: teamLead?.id as string,
-            startDate: toDate(startDate),
-            endDate: toDate(endDate),
+            teamLead: teamLead.userId,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
         },
     });
 
@@ -90,8 +66,8 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
             name,
             status,
             priority,
-            startDate: toDate(startDate),
-            endDate: toDate(endDate),
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
         },
     });
 };

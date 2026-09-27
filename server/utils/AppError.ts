@@ -1,11 +1,15 @@
 export class AppError extends Error {
-    constructor(readonly statusCode: number, message: string) {
+    constructor(
+        readonly statusCode: number,
+        message: string,
+        readonly details?: unknown,
+    ) {
         super(message);
         this.name = "AppError";
     }
 
-    static badRequest(message: string) {
-        return new AppError(400, message);
+    static badRequest(message: string, details?: unknown) {
+        return new AppError(400, message, details);
     }
 
     static unauthorized(message = "Unauthorized") {
