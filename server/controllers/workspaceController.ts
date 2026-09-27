@@ -1,24 +1,8 @@
 import type { Request, Response } from "express";
 import { getUserId } from "../middlewares/authMiddleware.js";
-import prisma from "../configs/prisma.js";
+import * as workspaceService from "../services/workspaceService.js";
 
-// Get all workspaces for user
 export const getUserWorkspaces = async (req: Request, res: Response) => {
-    const userId = getUserId(req);
-    const workspaces = await prisma.workspace.findMany({
-        where: {
-            members: { some: { userId: userId } }
-        },
-        include: {
-            members: { include: { user: true } },
-            projects: {
-                include: {
-                    tasks: { include: { assignee: true, comments: { include: { user: true } } } },
-                    members: { include: { user: true } }
-                }
-            },
-            owner: true
-        }
-    });
+    const workspaces = await workspaceService.listForUser(getUserId(req));
     return res.json({ workspaces });
 };

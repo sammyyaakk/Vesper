@@ -1,0 +1,86 @@
+import type { Prisma, Priority, TaskStatus, TaskType } from "@prisma/client";
+import prisma from "../configs/prisma.js";
+import { inngest } from "../inngest/index.js";
+import { AppError } from "../utils/AppError.js";
+
+export interface CreateTaskInput {
+    projectId: string;
+    title: string;
+    description?: string;
+    type?: TaskType;
+    status?: TaskStatus;
+    priority?: Priority;
+    assigneeId: string;
+    due_date: string;
+}
+
+const requireProjectLead = async (projectId: string, userId: string) => {
+    const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { members: { include: { user: true } } },
+    });
+    if (!project) throw AppError.notFound("Project not found");
+    if (project.team_lead !== userId) throw AppError.forbidden("You don't have admin privileges for this project");
+    return project;
+};
+
+export const create = async (userId: string, input: CreateTaskInput, origin?: string) => {
+    const { projectId, title, description, type, status, priority, assigneeId, due_date } = input;
+
+    const project = await requireProjectLead(projectId, userId);
+    if (assigneeId && !project.members.find((member) => member.user.id === assigneeId)) {
+        throw AppError.forbidden("assignee is not a member of the project / workspace");
+    }
+
+    const task = await prisma.task.create({
+        data: {
+            projectId,
+            title,
+            description,
+            type,
+            priority,
+            assigneeId,
+            status,
+            due_date: new Date(due_date),
+        },
+    });
+
+    const taskWithAssignee = await prisma.task.findUnique({
+        where: { id: task.id },
+        include: { assignee: true },
+    });
+
+    await inngest.send({
+        name: "app/task.assigned",
+        data: { taskId: task.id, origin },
+    });
+
+    return taskWithAssignee;
+};
+
+// TODO(phase-2) #3
+export const update = async (userId: string, taskId: string, data: Prisma.TaskUncheckedUpdateInput) => {
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
+    if (!task) throw AppError.notFound("Task not found");
+
+    await requireProjectLead(task.projectId, userId);
+
+    return prisma.task.update({
+        where: { id: taskId },
+        data,
+    });
+};
+
+export const remove = async (userId: string, taskIds: string[]) => {
+    const tasks = await prisma.task.findMany({
+        where: { id: { in: taskIds } },
+    });
+    if (tasks.length === 0) throw AppError.notFound("Task not found");
+
+    // TODO(phase-2) #2
+    await requireProjectLead(tasks[0]!.projectId, userId);
+
+    await prisma.task.deleteMany({
+        where: { id: { in: taskIds } },
+    });
+};
