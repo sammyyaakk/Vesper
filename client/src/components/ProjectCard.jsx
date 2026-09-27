@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { getProjectProgress } from "../utils/projectProgress";
 
 const statusColors = {
     PLANNING: "bg-gray-200 dark:bg-zinc-600 text-gray-900 dark:text-zinc-200",
@@ -36,10 +37,10 @@ const ProjectCard = ({ project }) => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 dark:text-zinc-500">Progress</span>
-                    <span className="text-gray-400 dark:text-zinc-400">{project.progress || 0}%</span>
+                    <span className="text-gray-400 dark:text-zinc-400">{getProjectProgress(project.tasks)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-zinc-800 h-1.5 rounded">
-                    <div className="h-1.5 rounded bg-blue-500" style={{ width: `${project.progress || 0}%` }} />
+                    <div className="h-1.5 rounded bg-blue-500" style={{ width: `${getProjectProgress(project.tasks)}%` }} />
                 </div>
             </div>
 

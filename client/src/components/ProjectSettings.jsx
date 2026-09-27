@@ -20,7 +20,6 @@ export default function ProjectSettings({ project }) {
         priority: "MEDIUM",
         startDate: "2025-09-10",
         endDate: "2025-10-15",
-        progress: 30,
     });
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -105,12 +104,6 @@ export default function ProjectSettings({ project }) {
                             <label className={labelClasses}>End Date</label>
                             <input type="date" value={format(formData.endDate, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, endDate: new Date(e.target.value) })} className={inputClasses} />
                         </div>
-                    </div>
-
-                    {/* Progress */}
-                    <div className="space-y-2">
-                        <label className={labelClasses}>Progress: {formData.progress}%</label>
-                        <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={(e) => setFormData({ ...formData, progress: Number(e.target.value) })} className="w-full accent-blue-500 dark:accent-blue-400" />
                     </div>
 
                     {/* Save Button */}

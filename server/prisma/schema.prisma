@@ -96,7 +96,6 @@ model Project {
     endDate     DateTime? @map("end_date")
     teamLead    String    @map("team_lead")
     workspaceId String
-    progress    Int             @default(0)
     createdAt   DateTime        @default(now())
     updatedAt   DateTime        @updatedAt
     members     ProjectMember[]

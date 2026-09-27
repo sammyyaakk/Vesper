@@ -21,7 +21,6 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         endDate: "",
         teamMembers: [],
         teamLeadEmail: "",
-        progress: 0,
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);

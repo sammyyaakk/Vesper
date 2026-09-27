@@ -9,7 +9,6 @@ interface ProjectFields {
     description?: string;
     status?: ProjectStatus;
     priority?: Priority;
-    progress?: number;
     startDate?: string;
     endDate?: string;
 }
@@ -26,7 +25,7 @@ export interface UpdateProjectInput extends ProjectFields {
 const toDate = (value?: string) => (value ? new Date(value) : null);
 
 export const create = async (userId: string, input: CreateProjectInput) => {
-    const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, progress, priority } = input;
+    const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
 
     const workspace = await requireWorkspaceRole(
         workspaceId,
@@ -47,7 +46,6 @@ export const create = async (userId: string, input: CreateProjectInput) => {
             description,
             status,
             priority,
-            progress,
             // TODO(phase-2) #6: validate team_lead
             teamLead: teamLead?.id as string,
             startDate: toDate(startDate),
@@ -76,7 +74,7 @@ export const create = async (userId: string, input: CreateProjectInput) => {
 };
 
 export const update = async (userId: string, input: UpdateProjectInput) => {
-    const { id, workspaceId, description, name, status, startDate, endDate, progress, priority } = input;
+    const { id, workspaceId, description, name, status, startDate, endDate, priority } = input;
 
     // TODO(phase-2) #4
     const workspace = await requireWorkspace(workspaceId);
@@ -92,7 +90,6 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
             name,
             status,
             priority,
-            progress,
             startDate: toDate(startDate),
             endDate: toDate(endDate),
         },

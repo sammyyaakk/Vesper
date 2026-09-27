@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getProjectProgress } from "../utils/projectProgress";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
@@ -176,7 +177,7 @@ const TaskDetails = () => {
                         <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-zinc-400 mt-3">
                             <span>Status: {project.status}</span>
                             <span>Priority: {project.priority}</span>
-                            <span>Progress: {project.progress}%</span>
+                            <span>Progress: {getProjectProgress(project.tasks)}%</span>
                         </div>
                     </div>
                 )}
