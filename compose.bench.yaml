@@ -1,0 +1,20 @@
+# Local Postgres for performance benchmarks; the named volume keeps the 50k-task seed between runs
+services:
+  postgres-bench:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vesper
+      POSTGRES_PASSWORD: vesper
+      POSTGRES_DB: vesper_bench
+    ports:
+      - "5434:5432"
+    volumes:
+      - bench-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vesper -d vesper_bench"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  bench-data:

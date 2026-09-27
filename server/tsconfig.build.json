@@ -4,6 +4,7 @@
         "node_modules",
         "dist",
         "tests",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "scripts/bench"
     ]
 }
