@@ -2,6 +2,7 @@ import type { Prisma, Priority, TaskStatus, TaskType } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
 import { AppError } from "../utils/AppError.js";
+import { requireProjectLead } from "./authorization.js";
 
 export interface CreateTaskInput {
     projectId: string;
@@ -13,16 +14,6 @@ export interface CreateTaskInput {
     assigneeId: string;
     due_date: string;
 }
-
-const requireProjectLead = async (projectId: string, userId: string) => {
-    const project = await prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { include: { user: true } } },
-    });
-    if (!project) throw AppError.notFound("Project not found");
-    if (project.team_lead !== userId) throw AppError.forbidden("You don't have admin privileges for this project");
-    return project;
-};
 
 export const create = async (userId: string, input: CreateTaskInput, origin?: string) => {
     const { projectId, title, description, type, status, priority, assigneeId, due_date } = input;
