@@ -11,12 +11,12 @@ export interface CreateTaskInput {
     type?: TaskType;
     status?: TaskStatus;
     priority?: Priority;
-    assigneeId: string;
-    due_date: string;
+    assigneeId?: string | null;
+    dueDate: string;
 }
 
 export const create = async (userId: string, input: CreateTaskInput, origin?: string) => {
-    const { projectId, title, description, type, status, priority, assigneeId, due_date } = input;
+    const { projectId, title, description, type, status, priority, assigneeId, dueDate } = input;
 
     const project = await requireProjectLead(projectId, userId);
     if (assigneeId && !project.members.find((member) => member.user.id === assigneeId)) {
@@ -30,9 +30,9 @@ export const create = async (userId: string, input: CreateTaskInput, origin?: st
             description,
             type,
             priority,
-            assigneeId,
+            assigneeId: assigneeId || null,
             status,
-            due_date: new Date(due_date),
+            dueDate: new Date(dueDate),
         },
     });
 

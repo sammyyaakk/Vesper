@@ -48,7 +48,7 @@ export const requireProjectLead = async (
     denied = AppError.forbidden("You don't have admin privileges for this project"),
 ) => {
     const project = await requireProject(projectId);
-    if (project.team_lead !== userId) throw denied;
+    if (project.teamLead !== userId) throw denied;
     return project;
 };
 

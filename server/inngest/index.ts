@@ -55,7 +55,7 @@ const syncWorkspaceCreation = inngest.createFunction({ id: "sync-workspace-from-
             name: data.name,
             slug: data.slug,
             ownerId: data.created_by,
-            image_url: data.image_url,
+            imageUrl: data.image_url,
         },
     });
 
@@ -79,7 +79,7 @@ const syncWorkspaceUpdation = inngest.createFunction({ id: "update-workspace-fro
         data: {
             name: data.name,
             slug: data.slug,
-            image_url: data.image_url,
+            imageUrl: data.image_url,
         },
     });
 });
@@ -108,7 +108,7 @@ const syncWorkspaceMemberCreation = inngest.createFunction({ id: "sync-workspace
 });
 
 // Inngest Function to Send Email on Task Creation
-const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-assignment-mail" }, { event: "app/task.assigned" }, async ({ event, step }) => {
+const sendTaskAssignmentEmail = inngest.createFunction({ id: "send-task-assignment-mail" }, { event: "app/task.assigned" }, async ({ event, step }) => {
     const { taskId, origin } = event.data;
 
     // TODO(phase-2) #19: handle a deleted task
@@ -116,6 +116,7 @@ const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-ass
         where: { id: taskId },
         include: { assignee: true, project: true },
     }))!;
+    if (!task.assignee) return;
 
     await sendEmail({
         to: task.assignee.email,
@@ -129,7 +130,7 @@ const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-ass
                     
                     <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
                         <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description}</p>
-                        <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+                        <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.dueDate).toLocaleDateString()}</p>
                     </div>
                     
                     <a href="${origin}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
@@ -143,8 +144,8 @@ const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-ass
                     `,
     });
 
-    if (new Date(task.due_date).toDateString() !== new Date().toDateString()) {
-        await step.sleepUntil("wait-for-the-due-date", new Date(task.due_date));
+    if (new Date(task.dueDate).toDateString() !== new Date().toDateString()) {
+        await step.sleepUntil("wait-for-the-due-date", new Date(task.dueDate));
 
         await step.run("check-if-task-is-completed ", async () => {
             const task = await prisma.task.findUnique({
@@ -152,23 +153,24 @@ const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-ass
                 include: { assignee: true, project: true },
             });
 
-            if (!task) return;
+            const assignee = task?.assignee;
+            if (!task || !assignee) return;
 
             if (task.status !== "DONE") {
                 await step.run("send-task-reminder-mail", async () => {
                     await sendEmail({
-                        to: task.assignee.email,
+                        to: assignee.email,
                         subject: `Reminder for ${task.project.name}`,
                         body: `
                                     <div style="max-width: 600px;">
-                                    <h2>Hi ${task.assignee.name}, 👋</h2>
+                                    <h2>Hi ${assignee.name}, 👋</h2>
                                     
                                     <p style="font-size: 16px;">You have a task due in ${task.project.name}:</p>
                                     <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
                                     
                                     <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
                                         <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description}</p>
-                                        <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+                                        <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.dueDate).toLocaleDateString()}</p>
                                     </div>
                                     
                                     <a href="${origin}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
@@ -188,4 +190,4 @@ const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-ass
 });
 
 // Inngest functions
-export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation, sendBookingConfirmationEmail];
+export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation, sendTaskAssignmentEmail];

@@ -55,7 +55,7 @@ model User {
     tasks           Task[]            @relation("TaskAssignee")
     comments        Comment[]
     ownedWorkspaces Workspace[]
-    ProjectMember   ProjectMember[]
+    projectMembers  ProjectMember[]
 }
 
 model Workspace {
@@ -66,7 +66,7 @@ model Workspace {
     settings    Json     @default("{}")
     ownerId     String
     createdAt   DateTime @default(now())
-    image_url   String   @default("")
+    imageUrl    String   @default("") @map("image_url")
     updatedAt   DateTime @updatedAt
 
     members  WorkspaceMember[]
@@ -92,16 +92,16 @@ model Project {
     description String?
     priority    Priority        @default(MEDIUM)
     status      ProjectStatus   @default(ACTIVE)
-    start_date  DateTime?
-    end_date    DateTime?
-    team_lead   String
+    startDate   DateTime? @map("start_date")
+    endDate     DateTime? @map("end_date")
+    teamLead    String    @map("team_lead")
     workspaceId String
     progress    Int             @default(0)
     createdAt   DateTime        @default(now())
     updatedAt   DateTime        @updatedAt
     members     ProjectMember[]
 
-    owner     User      @relation("ProjectOwner", fields: [team_lead], references: [id], onDelete: Cascade)
+    owner     User      @relation("ProjectOwner", fields: [teamLead], references: [id], onDelete: Cascade)
     workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
     tasks     Task[]
 }
@@ -124,13 +124,13 @@ model Task {
     status      TaskStatus @default(TODO)
     type        TaskType   @default(TASK)
     priority    Priority   @default(MEDIUM)
-    assigneeId  String
-    due_date    DateTime
+    assigneeId  String?
+    dueDate     DateTime   @map("due_date")
     createdAt   DateTime   @default(now())
     updatedAt   DateTime   @updatedAt
 
     project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-    assignee User      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+    assignee User?     @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
     comments Comment[]
 }
 

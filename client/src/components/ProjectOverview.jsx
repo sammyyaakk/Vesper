@@ -78,10 +78,10 @@ const ProjectOverview = () => {
                                                 {project.members.length} members
                                             </div>
                                         )}
-                                        {project.end_date && (
+                                        {project.endDate && (
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-3 h-3" />
-                                                {format(new Date(project.end_date), "MMM d, yyyy")}
+                                                {format(new Date(project.endDate), "MMM d, yyyy")}
                                             </div>
                                         )}
                                     </div>

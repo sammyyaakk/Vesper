@@ -21,14 +21,14 @@ const ProjectCalendar = ({ tasks }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     const today = new Date();
-    const getTasksForDate = (date) => tasks.filter((task) => isSameDay(task.due_date, date));
+    const getTasksForDate = (date) => tasks.filter((task) => isSameDay(task.dueDate, date));
 
     const upcomingTasks = tasks
-        .filter((task) => task.due_date && !isBefore(task.due_date, today) && task.status !== "DONE")
-        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+        .filter((task) => task.dueDate && !isBefore(task.dueDate, today) && task.status !== "DONE")
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
         .slice(0, 5);
 
-    const overdueTasks = tasks.filter((task) => task.due_date && isBefore(task.due_date, today) && task.status !== "DONE");
+    const overdueTasks = tasks.filter((task) => task.dueDate && isBefore(task.dueDate, today) && task.status !== "DONE");
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(currentMonth),
@@ -71,7 +71,7 @@ const ProjectCalendar = ({ tasks }) => {
                         {daysInMonth.map((day) => {
                             const dayTasks = getTasksForDate(day);
                             const isSelected = isSameDay(day, selectedDate);
-                            const hasOverdue = dayTasks.some((t) => t.status !== "DONE" && isBefore(t.due_date, today));
+                            const hasOverdue = dayTasks.some((t) => t.status !== "DONE" && isBefore(t.dueDate, today));
 
                             return (
                                 <button
@@ -147,7 +147,7 @@ const ProjectCalendar = ({ tasks }) => {
                                             {task.type}
                                         </span>
                                     </div>
-                                    <p className="text-xs text-zinc-600 dark:text-zinc-400">{format(task.due_date, "MMM d")}</p>
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-400">{format(task.dueDate, "MMM d")}</p>
                                 </div>
                             ))}
                         </div>
@@ -170,7 +170,7 @@ const ProjectCalendar = ({ tasks }) => {
                                         </span>
                                     </div>
                                     <p className="text-xs text-red-600 dark:text-red-300">
-                                        Due {format(task.due_date, "MMM d")}
+                                        Due {format(task.dueDate, "MMM d")}
                                     </p>
                                 </div>
                             ))}

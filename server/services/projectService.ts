@@ -10,13 +10,13 @@ interface ProjectFields {
     status?: ProjectStatus;
     priority?: Priority;
     progress?: number;
-    start_date?: string;
-    end_date?: string;
+    startDate?: string;
+    endDate?: string;
 }
 
 export interface CreateProjectInput extends ProjectFields {
-    team_lead: string;
-    team_members?: string[];
+    teamLeadEmail: string;
+    teamMembers?: string[];
 }
 
 export interface UpdateProjectInput extends ProjectFields {
@@ -26,7 +26,7 @@ export interface UpdateProjectInput extends ProjectFields {
 const toDate = (value?: string) => (value ? new Date(value) : null);
 
 export const create = async (userId: string, input: CreateProjectInput) => {
-    const { workspaceId, description, name, status, start_date, end_date, team_members, team_lead, progress, priority } = input;
+    const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, progress, priority } = input;
 
     const workspace = await requireWorkspaceRole(
         workspaceId,
@@ -36,7 +36,7 @@ export const create = async (userId: string, input: CreateProjectInput) => {
     );
 
     const teamLead = await prisma.user.findUnique({
-        where: { email: team_lead },
+        where: { email: teamLeadEmail },
         select: { id: true },
     });
 
@@ -49,15 +49,15 @@ export const create = async (userId: string, input: CreateProjectInput) => {
             priority,
             progress,
             // TODO(phase-2) #6: validate team_lead
-            team_lead: teamLead?.id as string,
-            start_date: toDate(start_date),
-            end_date: toDate(end_date),
+            teamLead: teamLead?.id as string,
+            startDate: toDate(startDate),
+            endDate: toDate(endDate),
         },
     });
 
-    if (team_members && team_members.length > 0) {
+    if (teamMembers && teamMembers.length > 0) {
         const membersToAdd = workspace.members
-            .filter((member) => team_members.includes(member.user.email))
+            .filter((member) => teamMembers.includes(member.user.email))
             .map((member) => member.user.id);
 
         await prisma.projectMember.createMany({
@@ -76,7 +76,7 @@ export const create = async (userId: string, input: CreateProjectInput) => {
 };
 
 export const update = async (userId: string, input: UpdateProjectInput) => {
-    const { id, workspaceId, description, name, status, start_date, end_date, progress, priority } = input;
+    const { id, workspaceId, description, name, status, startDate, endDate, progress, priority } = input;
 
     // TODO(phase-2) #4
     const workspace = await requireWorkspace(workspaceId);
@@ -93,8 +93,8 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
             status,
             priority,
             progress,
-            start_date: toDate(start_date),
-            end_date: toDate(end_date),
+            startDate: toDate(startDate),
+            endDate: toDate(endDate),
         },
     });
 };
