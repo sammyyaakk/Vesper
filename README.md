@@ -161,7 +161,7 @@ npx prisma migrate deploy
 
 ```bash
 # 1. API: http://localhost:5000
-cd server && npm run server
+cd server && npm run dev
 
 # 2. Client: http://localhost:5173
 cd client && npm run dev

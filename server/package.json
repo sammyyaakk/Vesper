@@ -2,11 +2,13 @@
   "name": "vesper-server",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "postinstall": "npx prisma generate",
-    "start": "prisma generate && node server.js",
-    "server": "nodemon server.js",
+    "postinstall": "prisma generate",
+    "dev": "tsx watch server.js",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
     "sync:clerk": "node scripts/sync-clerk.js"
   },
   "keywords": [],
@@ -14,8 +16,13 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "nodemon": "^3.1.10",
-    "prisma": "6.18.0"
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.0",
+    "@types/nodemailer": "7.0.12",
+    "prisma": "6.18.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
   },
   "dependencies": {
     "@clerk/express": "^1.7.26",

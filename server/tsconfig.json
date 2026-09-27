@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        // Node 24 supports ES2023 natively, so nothing needs down-levelling
+        "target": "ES2023",
+        "lib": ["ES2023"],
+        "types": ["node"],
+
+        // package.json has "type": "module": resolve imports exactly like Node's ESM loader.
+        // Relative imports keep their ".js" extension, even when importing a .ts file.
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "verbatimModuleSyntax": true,
+
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+
+        // Incremental migration: .js files compile alongside .ts but aren't type-checked
+        "allowJs": true,
+        "checkJs": false,
+
+        "outDir": "dist",
+        "rootDir": ".",
+        "sourceMap": true,
+        "skipLibCheck": true
+    },
+    "include": ["**/*.ts", "**/*.js"],
+    "exclude": ["node_modules", "dist"]
+}
