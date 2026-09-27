@@ -3,6 +3,7 @@ import type { WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import sendEmail from "../configs/nodemailer.js";
 import { assignmentEmail, reminderEmail } from "../emails/taskEmails.js";
+import { removeUser } from "../services/userService.js";
 import type { inngest } from "./index.js";
 
 export type Step = Pick<GetStepTools<typeof inngest>, "run" | "sleepUntil">;
@@ -33,13 +34,7 @@ export const handleUserCreation = async (event: { data?: EventData }) => {
 };
 
 export const handleUserDeletion = async (event: { data?: EventData }) => {
-    const { data } = event;
-
-    await prisma.user.delete({
-        where: {
-            id: data.id,
-        },
-    });
+    await removeUser(event.data.id);
 };
 
 export const handleUserUpdation = async (event: { data?: EventData }) => {

@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import { serve } from "inngest/express";
+import { appUrl } from "./configs/appUrl.js";
 import { inngest, functions } from "./inngest/index.js";
 import { protect } from "./middlewares/authMiddleware.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
@@ -16,7 +17,7 @@ export const app = express();
 
 app.use(requestLogger);
 app.use(express.json());
-app.use(cors());
+app.use(cors({ origin: [appUrl()] }));
 app.use(clerkMiddleware());
 
 app.get("/", (req, res) => res.send("Server is live!"));

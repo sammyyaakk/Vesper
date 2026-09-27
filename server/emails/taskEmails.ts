@@ -1,13 +1,8 @@
+import { appUrl } from "../configs/appUrl.js";
+
 const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
 export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
-
-const appUrl = () => {
-    const url = process.env.APP_URL;
-    if (url) return url.replace(/\/+$/, "");
-    if (process.env.NODE_ENV === "production") throw new Error("APP_URL must be set in production");
-    return "http://localhost:5173";
-};
 
 export const taskUrl = (projectId: string, taskId: string) =>
     `${appUrl()}/taskDetails?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`;
