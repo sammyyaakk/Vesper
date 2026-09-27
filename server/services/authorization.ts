@@ -1,8 +1,10 @@
-import type { WorkspaceRole } from "@prisma/client";
+import type { Task, WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
+import type { UpdateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
 
 type WorkspaceWithMembers = NonNullable<Awaited<ReturnType<typeof findWorkspace>>>;
+type ProjectWithMembers = NonNullable<Awaited<ReturnType<typeof findProject>>>;
 
 const findWorkspace = (workspaceId: string) =>
     prisma.workspace.findUnique({
@@ -42,25 +44,17 @@ export const requireProject = async (projectId: string) => {
     return project;
 };
 
-export const requireProjectLead = async (
-    projectId: string,
-    userId: string,
-    denied = AppError.forbidden("You don't have admin privileges for this project"),
-) => {
-    const project = await requireProject(projectId);
-    if (project.teamLead !== userId) throw denied;
-    return project;
-};
+export const isProjectMember = (project: ProjectWithMembers, userId: string) =>
+    project.teamLead === userId || project.members.some((member) => member.userId === userId);
 
-export const requireProjectMember = async (
-    projectId: string,
-    userId: string,
-    denied = AppError.forbidden("You are not member of this project"),
-) => {
-    const project = await requireProject(projectId);
-    const isMember = project.teamLead === userId || project.members.some((member) => member.userId === userId);
-    if (!isMember) throw denied;
-    return project;
+// Managers are the project lead and admins of the project's own workspace
+const isProjectManager = async (project: ProjectWithMembers, userId: string) => {
+    if (project.teamLead === userId) return true;
+    const membership = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId, workspaceId: project.workspaceId } },
+        select: { role: true },
+    });
+    return membership?.role === "ADMIN";
 };
 
 export const requireProjectManager = async (
@@ -69,14 +63,49 @@ export const requireProjectManager = async (
     denied = AppError.forbidden("You don't have permission to manage this project"),
 ) => {
     const project = await requireProject(projectId);
-    if (project.teamLead === userId) return project;
-    const workspace = await requireWorkspace(project.workspaceId);
-    if (!hasWorkspaceRole(workspace, userId, "ADMIN")) throw denied;
+    if (!(await isProjectManager(project, userId))) throw denied;
     return project;
 };
 
-export const requireTaskProjectMember = async (taskId: string, userId: string) => {
-    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+export const requireProjectAccess = async (projectId: string, userId: string) => {
+    const project = await requireProject(projectId);
+    const isManager = await isProjectManager(project, userId);
+    if (!isManager && !isProjectMember(project, userId)) throw AppError.forbidden("You are not member of this project");
+    return { project, isManager };
+};
+
+export const requireTaskAccess = async (taskId: string, userId: string) => {
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw AppError.notFound("Task not found");
-    await requireProjectMember(task.projectId, userId);
+    const { project, isManager } = await requireProjectAccess(task.projectId, userId);
+    return { task, project, isManager };
+};
+
+// DR-022: members may claim an unassigned task, unassign themselves, and change the status of their own tasks
+export const assertCanUpdateTask = (task: Task, isManager: boolean, userId: string, changes: UpdateTaskInput) => {
+    if (isManager) return;
+
+    const { status, assigneeId, ...details } = changes;
+    if (Object.values(details).some((value) => value !== undefined)) {
+        throw AppError.forbidden("Only the project lead or a workspace admin can edit task details");
+    }
+
+    if (assigneeId !== undefined) {
+        const claiming = task.assigneeId === null && assigneeId === userId;
+        const unassigningSelf = task.assigneeId === userId && assigneeId === null;
+        if (!claiming && !unassigningSelf) {
+            throw AppError.forbidden("You can only claim unassigned tasks or unassign yourself");
+        }
+    }
+
+    const assigneeAfter = assigneeId !== undefined ? assigneeId : task.assigneeId;
+    if (status !== undefined && assigneeAfter !== userId) {
+        throw AppError.forbidden("You can only change the status of tasks assigned to you");
+    }
+};
+
+export const assertCanCreateTaskFor = (isManager: boolean, userId: string, assigneeId: string | null | undefined) => {
+    if (!isManager && assigneeId && assigneeId !== userId) {
+        throw AppError.forbidden("Members can only create unassigned tasks or tasks assigned to themselves");
+    }
 };

@@ -1,7 +1,7 @@
 import prisma from "../configs/prisma.js";
 import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
-import { requireProjectLead, requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
+import { requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
 
 export const create = async (userId: string, input: CreateProjectInput) => {
     const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
@@ -67,7 +67,7 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
 };
 
 export const addMember = async (userId: string, projectId: string, email: string) => {
-    const project = await requireProjectLead(projectId, userId, AppError.forbidden("Only the project lead can add members"));
+    const project = await requireProjectManager(projectId, userId, AppError.forbidden("Only the project lead or a workspace admin can add members"));
     const workspace = await requireWorkspace(project.workspaceId);
 
     const newMember = workspace.members.find((member) => member.user.email === email);

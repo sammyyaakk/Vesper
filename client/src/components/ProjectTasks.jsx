@@ -2,7 +2,7 @@ import api from "../configs/api";
 import toast from "react-hot-toast";
 import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { useDispatch } from "react-redux";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
@@ -26,6 +26,7 @@ const priorityTexts = {
 const ProjectTasks = ({ tasks }) => {
     const dispatch = useDispatch();
     const { getToken } = useAuth();
+    const { user } = useUser();
     const navigate = useNavigate();
     const [selectedTasks, setSelectedTasks] = useState([]);
 
@@ -79,6 +80,24 @@ const ProjectTasks = ({ tasks }) => {
         const { name, value } = e.target;
         setFilters((prev) => ({ ...prev, [name]: value }));
     };
+
+    const handleAssign = async (task, assigneeId) => {
+        try {
+            const token = await getToken();
+            const { data } = await api.put(`/api/tasks/${task.id}`, { assigneeId }, { headers: { Authorization: `Bearer ${token}` } });
+            dispatch(updateTask({ ...task, ...data.task }));
+            toast.success(assigneeId ? "Task assigned to you" : "You're no longer assigned");
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message);
+        }
+    };
+
+    const actionsFor = (task) => ({
+        onOpen: () => openTask(task),
+        onDelete: () => handleDelete([task.id]),
+        onClaim: !task.assigneeId && user ? () => handleAssign(task, user.id) : undefined,
+        onUnassign: user && task.assigneeId === user.id ? () => handleAssign(task, null) : undefined,
+    });
 
     const handleStatusChange = async (taskId, newStatus) => {
         try {
@@ -278,7 +297,7 @@ const ProjectTasks = ({ tasks }) => {
                                                     </div>
                                                 </td>
                                                 <td className="pr-2">
-                                                    <TaskActionsMenu onOpen={() => openTask(task)} onDelete={() => handleDelete([task.id])} />
+                                                    <TaskActionsMenu {...actionsFor(task)} />
                                                 </td>
                                             </tr>
                                         );
@@ -314,7 +333,7 @@ const ProjectTasks = ({ tasks }) => {
                                                 />
                                                 <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
                                             </div>
-                                            <TaskActionsMenu onOpen={() => openTask(task)} onDelete={() => handleDelete([task.id])} />
+                                            <TaskActionsMenu {...actionsFor(task)} />
                                         </div>
 
                                         <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">

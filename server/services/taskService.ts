@@ -1,17 +1,28 @@
-import type { Prisma } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
-import type { CreateTaskInput } from "../schemas/task.js";
+import type { CreateTaskInput, UpdateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
-import { requireProjectLead } from "./authorization.js";
+import {
+    assertCanCreateTaskFor,
+    assertCanUpdateTask,
+    isProjectMember,
+    requireProjectAccess,
+    requireProjectManager,
+    requireTaskAccess,
+} from "./authorization.js";
+
+const assertAssigneeOnProject = (project: Parameters<typeof isProjectMember>[0], assigneeId: string | null | undefined) => {
+    if (assigneeId && !isProjectMember(project, assigneeId)) {
+        throw AppError.badRequest("Assignee must be a member of this project");
+    }
+};
 
 export const create = async (userId: string, input: CreateTaskInput, origin?: string) => {
     const { projectId, title, description, type, status, priority, assigneeId, dueDate } = input;
 
-    const project = await requireProjectLead(projectId, userId);
-    if (assigneeId && !project.members.find((member) => member.user.id === assigneeId)) {
-        throw AppError.forbidden("assignee is not a member of the project / workspace");
-    }
+    const { project, isManager } = await requireProjectAccess(projectId, userId);
+    assertCanCreateTaskFor(isManager, userId, assigneeId);
+    assertAssigneeOnProject(project, assigneeId);
 
     const task = await prisma.task.create({
         data: {
@@ -39,16 +50,16 @@ export const create = async (userId: string, input: CreateTaskInput, origin?: st
     return taskWithAssignee;
 };
 
-// TODO(phase-2) #3
-export const update = async (userId: string, taskId: string, data: Prisma.TaskUncheckedUpdateInput) => {
-    const task = await prisma.task.findUnique({ where: { id: taskId } });
-    if (!task) throw AppError.notFound("Task not found");
+export const update = async (userId: string, taskId: string, changes: UpdateTaskInput) => {
+    const { task, project, isManager } = await requireTaskAccess(taskId, userId);
+    assertCanUpdateTask(task, isManager, userId, changes);
+    assertAssigneeOnProject(project, changes.assigneeId);
 
-    await requireProjectLead(task.projectId, userId);
-
+    const { title, description, type, status, priority, assigneeId, dueDate } = changes;
     return prisma.task.update({
         where: { id: taskId },
-        data,
+        data: { title, description, type, status, priority, assigneeId, dueDate },
+        include: { assignee: true },
     });
 };
 
@@ -58,7 +69,7 @@ export const remove = async (userId: string, taskIds: string[]) => {
     if (tasks.length !== ids.length) throw AppError.notFound("Task not found");
 
     for (const projectId of new Set(tasks.map((task) => task.projectId))) {
-        await requireProjectLead(projectId, userId);
+        await requireProjectManager(projectId, userId);
     }
 
     await prisma.task.deleteMany({ where: { id: { in: ids } } });

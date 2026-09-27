@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { getUserId } from "../middlewares/authMiddleware.js";
-import { createTaskSchema, deleteTasksSchema, taskParamsSchema } from "../schemas/task.js";
+import { createTaskSchema, deleteTasksSchema, taskParamsSchema, updateTaskSchema } from "../schemas/task.js";
 import * as taskService from "../services/taskService.js";
 import { parse } from "../utils/validation.js";
 
@@ -12,7 +12,7 @@ export const createTask = async (req: Request, res: Response) => {
 
 export const updateTask = async (req: Request, res: Response) => {
     const { id } = parse(taskParamsSchema, req.params);
-    const task = await taskService.update(getUserId(req), id, req.body);
+    const task = await taskService.update(getUserId(req), id, parse(updateTaskSchema, req.body));
     return res.json({ message: "Task updated successfully", task });
 };
 
