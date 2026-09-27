@@ -27,6 +27,13 @@ const project = await prisma.project.findFirstOrThrow({
     orderBy: { tasks: { _count: "desc" } },
 });
 const task = await prisma.task.findFirstOrThrow({ where: { projectId: project.id }, orderBy: { createdAt: "desc" } });
+// Cursor for the page after row 2,000 of the project's task list (same ordering as the endpoint)
+const deepCursor = await prisma.task.findFirstOrThrow({
+    where: { projectId: project.id },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: 1999,
+    select: { id: true },
+});
 const dataset = {
     tasks: await prisma.task.count(),
     comments: await prisma.comment.count(),
@@ -39,6 +46,12 @@ const scenarios: Scenario[] = [
     // The legacy endpoint returns the whole workspace (~77 MB); 10 connections time out, so it runs with 1
     { name: "GET /api/workspaces (full tree)", path: "/api/workspaces", connections: 1, durationSeconds: 30, timeoutSeconds: 60 },
     { name: "GET /api/comments/:taskId", path: `/api/comments/${task.id}`, ...standard },
+    { name: "GET /api/workspaces/:id/projects", path: "/api/workspaces/org_bench_main/projects", ...standard },
+    { name: "GET /api/workspaces/:id/summary", path: "/api/workspaces/org_bench_main/summary", ...standard },
+    { name: "GET /api/projects/:id/tasks (page 1)", path: `/api/projects/${project.id}/tasks?limit=50`, ...standard },
+    { name: "GET /api/projects/:id/tasks (after row 2,000)", path: `/api/projects/${project.id}/tasks?limit=50&cursor=${deepCursor.id}`, ...standard },
+    { name: "GET /api/projects/:id/tasks?assignee=me", path: `/api/projects/${project.id}/tasks?limit=50&assignee=me`, ...standard },
+    { name: "GET /api/tasks/:id/comments", path: `/api/tasks/${task.id}/comments?limit=50`, ...standard },
 ];
 
 const startServer = async () => {

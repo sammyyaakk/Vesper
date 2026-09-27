@@ -1,7 +1,10 @@
 import prisma from "../configs/prisma.js";
 import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
-import { requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
+import type { TaskListQuery } from "../schemas/query.js";
+import { pageArgs, toPage } from "../utils/pagination.js";
+import { requireProjectAccess, requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
+import { taskCountsByProject } from "./taskCounts.js";
 
 export const create = async (userId: string, input: CreateProjectInput) => {
     const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
@@ -80,4 +83,28 @@ export const addMember = async (userId: string, projectId: string, email: string
     return prisma.projectMember.create({
         data: { userId: newMember.userId, projectId },
     });
+};
+
+export const get = async (userId: string, projectId: string) => {
+    await requireProjectAccess(projectId, userId);
+    const project = await prisma.project.findUniqueOrThrow({
+        where: { id: projectId },
+        include: { members: { include: { user: true } }, owner: true },
+    });
+    const counts = await taskCountsByProject([projectId]);
+    return { ...project, taskCounts: counts.get(projectId)! };
+};
+
+export const listTasks = async (userId: string, projectId: string, query: TaskListQuery) => {
+    await requireProjectAccess(projectId, userId);
+    const { status, type, priority, assignee, limit } = query;
+    const assigneeId = assignee === "me" ? userId : assignee === "none" ? null : assignee;
+
+    const rows = await prisma.task.findMany({
+        where: { projectId, status, type, priority, ...(assignee !== undefined ? { assigneeId } : {}) },
+        include: { assignee: true },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        ...pageArgs(query),
+    });
+    return toPage(rows, limit);
 };
