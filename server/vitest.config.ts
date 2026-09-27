@@ -7,6 +7,7 @@ export default defineConfig({
         env: {
             NODE_ENV: "test",
             LOG_LEVEL: "silent",
+            APP_URL: "http://localhost:5173",
             DATABASE_URL: TEST_DATABASE_URL,
             DIRECT_URL: TEST_DATABASE_URL,
         },

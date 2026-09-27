@@ -6,7 +6,7 @@ import { parse } from "../utils/validation.js";
 
 export const createTask = async (req: Request, res: Response) => {
     const input = parse(createTaskSchema, req.body);
-    const task = await taskService.create(getUserId(req), input, req.get("origin"));
+    const task = await taskService.create(getUserId(req), input);
     return res.json({ task, message: "Task created successfully" });
 };
 

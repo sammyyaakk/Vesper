@@ -7,6 +7,9 @@ vi.mock("@clerk/express", () => ({
     getAuth: (req: Request) => ({ userId: req.header("x-test-user-id") ?? null }),
 }));
 
+// Tests must never send real email
+vi.mock("../../configs/nodemailer.js", () => ({ default: vi.fn().mockResolvedValue({ messageId: "test" }) }));
+
 const { inngest } = await import("../../inngest/index.js");
 const { default: prisma } = await import("../../configs/prisma.js");
 
