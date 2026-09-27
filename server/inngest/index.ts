@@ -7,6 +7,15 @@ import sendEmail from "../configs/nodemailer.js";
 // Create a client to send and receive events
 export const inngest = new Inngest({ id: "vesper", logger });
 
+interface ClerkUserData {
+    first_name?: string | null;
+    last_name?: string | null;
+    email_addresses?: { email_address: string }[];
+}
+
+const displayName = ({ first_name, last_name, email_addresses }: ClerkUserData) =>
+    [first_name, last_name].filter(Boolean).join(" ") || email_addresses?.[0]?.email_address.split("@")[0] || "User";
+
 // Inngest Function to save user data to a database
 const syncUserCreation = inngest.createFunction({ id: "sync-user-from-clerk" }, { event: "clerk/user.created" }, async ({ event }) => {
     const { data } = event;
@@ -14,7 +23,7 @@ const syncUserCreation = inngest.createFunction({ id: "sync-user-from-clerk" }, 
         data: {
             id: data.id,
             email: data?.email_addresses[0]?.email_address,
-            name: data?.first_name + " " + data?.last_name,
+            name: displayName(data),
             image: data?.image_url,
         },
     });
@@ -40,7 +49,7 @@ const syncUserUpdation = inngest.createFunction({ id: "update-user-from-clerk" }
         },
         data: {
             email: data?.email_addresses[0]?.email_address,
-            name: data?.first_name + " " + data?.last_name,
+            name: displayName(data),
             image: data?.image_url,
         },
     });
