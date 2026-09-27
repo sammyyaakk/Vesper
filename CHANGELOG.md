@@ -2,6 +2,41 @@
 
 Each phase lists what changed and why.
 
+## Phase 2: Security and validation (test-first)
+
+Every issue was first reproduced by an integration test that failed on the existing code, then fixed. 86 tests now guard the behaviour. See README → Security for the full list.
+
+### Test infrastructure
+- Vitest + Supertest against a disposable Postgres in Docker (`compose.test.yaml`, in-memory storage).
+- The test run refuses any database that isn't a local `*_test` database; migrations are applied per run and tables emptied before each test.
+- Clerk is replaced in the test process only (a header selects the user), so production code has no test-only path; event publishing and email sending are stubbed globally.
+- `app.ts` (the Express app) is separated from `server.ts` (`listen`); the Neon driver adapter is used only for Neon URLs.
+
+### Validation
+- Zod schemas for every request body and URL parameter (`server/schemas/`); controllers parse input into typed values, and service input types are derived from the schemas.
+- Bad input returns 400 with field-level errors instead of 500s or silently stored bad data (missing due dates, blank titles, end date before start, invalid enums and IDs).
+
+### Access control
+- Fixed: reading any task's comments by ID; bulk delete across projects; updating or moving another workspace's project; adding users from other workspaces; account enumeration through add-member; a team lead from outside the workspace; mass assignment on task updates.
+- Authorization always uses the resource's owner as stored in the database, never tenant IDs from the request.
+- Task permission rules: leads and workspace admins manage tasks; members create unassigned or self-assigned tasks, claim unassigned tasks, unassign themselves and change the status of their own tasks. "Assign to me" and "Unassign me" in the task row menu.
+- Database unique-constraint violations return 409.
+
+### Background jobs
+- Job logic lives in plain handler functions, tested with a fake Inngest `step`.
+- Emails escape all user-provided text; links come from the server-side `APP_URL`, not the request's `Origin` header.
+- Each side effect runs in exactly one step, so replays can't duplicate emails; deleted or reassigned tasks are skipped.
+- Reminders are a separate function, cancelled and rescheduled when the due date changes or the task is deleted, and they remind the project lead for unassigned tasks.
+- Clerk sync is idempotent (upserts); Clerk roles are mapped explicitly, with unknown roles getting the least privilege.
+- Event publishing is best-effort: a failed publish is logged and doesn't fail the request.
+
+### Hardening
+- CORS is limited to the client origin (`APP_URL`).
+- Deleting a user no longer deletes their projects or owned workspaces: ownership and project leadership pass to a remaining admin (or a promoted member), in one transaction.
+
+### New configuration
+- `APP_URL` (server): the client's public URL, used for email links and CORS; required in production.
+
 ## Phase 1: TypeScript foundation
 
 The goal was a typed, layered backend **without changing behaviour**, except for the listed product fixes. Known security bugs were deliberately **not** fixed here: Phase 2 fixes each one with a failing test first, and their locations are marked `TODO(phase-2) #n`.
