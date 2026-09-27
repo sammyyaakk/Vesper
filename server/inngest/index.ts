@@ -1,10 +1,11 @@
 import { Inngest } from "inngest";
 import type { WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
+import { logger } from "../configs/logger.js";
 import sendEmail from "../configs/nodemailer.js";
 
 // Create a client to send and receive events
-export const inngest = new Inngest({ id: "vesper" });
+export const inngest = new Inngest({ id: "vesper", logger });
 
 // Inngest Function to save user data to a database
 const syncUserCreation = inngest.createFunction({ id: "sync-user-from-clerk" }, { event: "clerk/user.created" }, async ({ event }) => {

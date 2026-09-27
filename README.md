@@ -140,7 +140,8 @@ cp client/.env.example client/.env
 
 | File | Variable | Value |
 |---|---|---|
-| `server/.env` | `NODE_ENV` | `development` |
+| `server/.env` | `NODE_ENV` | `development` (enables readable dev logs) |
+| | `LOG_LEVEL` | Optional: `debug`, `info` (default), `warn`, `error` |
 | | `CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | | `CLERK_SECRET_KEY` | Clerk secret key (server only, never in the client) |
 | | `DATABASE_URL` | Neon pooled connection string |
