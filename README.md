@@ -202,6 +202,18 @@ npm run sync:clerk -- send <orgId>
 
 This sends the same `clerk/user.created` and `clerk/organization.created` events Clerk's webhooks would, so the real sync functions run unchanged.
 
+### 8. Running the tests
+
+Integration tests (Vitest + Supertest) run against a disposable Postgres in Docker, never against the Neon database:
+
+```bash
+cd server
+npm run db:test   # starts Postgres on localhost:5433 (data kept in memory only)
+npm test
+```
+
+The test run refuses to start unless `DATABASE_URL` points at a local database whose name ends in `_test`. Migrations are applied once per run, and every table is emptied before each test. Clerk is replaced by a test double that reads the user ID from an `x-test-user-id` header, so no production code has a test-only path.
+
 ---
 
 ## Roadmap
