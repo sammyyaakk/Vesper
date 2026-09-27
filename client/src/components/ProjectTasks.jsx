@@ -1,12 +1,13 @@
 import api from "../configs/api";
 import toast from "react-hot-toast";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { useAuth } from "@clerk/clerk-react";
 import { useDispatch } from "react-redux";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import TaskActionsMenu from "./TaskActionsMenu";
 
 const typeIcons = {
     BUG: { icon: Bug, color: "text-red-600 dark:text-red-400" },
@@ -52,6 +53,28 @@ const ProjectTasks = ({ tasks }) => {
         });
     }, [filters, tasks]);
 
+    const visibleIds = filteredTasks.map((t) => t.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedTasks.includes(id));
+    const someVisibleSelected = visibleIds.some((id) => selectedTasks.includes(id));
+
+    useEffect(() => {
+        const existing = new Set(tasks.map((t) => t.id));
+        setSelectedTasks((prev) => {
+            const next = prev.filter((id) => existing.has(id));
+            return next.length === prev.length ? prev : next;
+        });
+    }, [tasks]);
+
+    const toggleTask = (taskId) =>
+        setSelectedTasks((prev) => (prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]));
+
+    const toggleAllVisible = () =>
+        setSelectedTasks((prev) =>
+            allVisibleSelected ? prev.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...prev, ...visibleIds]))
+        );
+
+    const openTask = (task) => navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`);
+
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters((prev) => ({ ...prev, [name]: value }));
@@ -76,19 +99,21 @@ const ProjectTasks = ({ tasks }) => {
         }
     };
 
-    const handleDelete = async () => {
-        try {
-            const confirm = window.confirm("Are you sure you want to delete the selected tasks?");
-            if (!confirm) return;
+    const handleDelete = async (taskIds) => {
+        if (taskIds.length === 0) return;
+        const label = taskIds.length === 1 ? "this task" : `these ${taskIds.length} tasks`;
+        if (!window.confirm(`Delete ${label}? This can't be undone.`)) return;
 
+        try {
             const token = await getToken();
             toast.loading("Deleting tasks...");
 
-            await api.post("/api/tasks/delete", { tasksIds: selectedTasks }, { headers: { Authorization: `Bearer ${token}` } });
-            dispatch(deleteTask(selectedTasks));
+            await api.post("/api/tasks/delete", { tasksIds: taskIds }, { headers: { Authorization: `Bearer ${token}` } });
+            dispatch(deleteTask(taskIds));
+            setSelectedTasks((prev) => prev.filter((id) => !taskIds.includes(id)));
 
             toast.dismissAll();
-            toast.success("Tasks deleted successfully");
+            toast.success(taskIds.length === 1 ? "Task deleted" : `${taskIds.length} tasks deleted`);
         } catch (error) {
             toast.dismissAll();
             toast.error(error?.response?.data?.message || error.message);
@@ -151,11 +176,16 @@ const ProjectTasks = ({ tasks }) => {
                     </button>
                 )}
 
-                {selectedTasks.length > 0 && (
-                    <button type="button" onClick={handleDelete} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" >
-                        <Trash className="size-3" /> Delete
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onClick={() => handleDelete(selectedTasks)}
+                    disabled={selectedTasks.length === 0}
+                    title={selectedTasks.length === 0 ? "Select tasks using the checkboxes to delete them" : undefined}
+                    className="ml-auto px-3 py-1 flex items-center gap-2 rounded text-sm border transition-colors border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/50 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 disabled:hover:bg-transparent dark:disabled:border-zinc-700 dark:disabled:text-zinc-600"
+                >
+                    <Trash className="size-4" />
+                    {selectedTasks.length > 0 ? `Delete (${selectedTasks.length})` : "Delete"}
+                </button>
             </div>
 
             {/* Tasks Table */}
@@ -166,12 +196,15 @@ const ProjectTasks = ({ tasks }) => {
                         <table className="min-w-full text-sm text-left not-dark:bg-white text-zinc-900 dark:text-zinc-300">
                             <thead className="text-xs uppercase dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400 ">
                                 <tr>
-                                    <th className="pl-2 pr-1">
+                                    <th className="pl-3 pr-2 w-10">
                                         <input
-                                            onChange={() => selectedTasks.length > 1 ? setSelectedTasks([]) : setSelectedTasks(tasks.map((t) => t.id))}
-                                            checked={selectedTasks.length === tasks.length}
                                             type="checkbox"
-                                            className="size-3 accent-zinc-600 dark:accent-zinc-500"
+                                            aria-label="Select all visible tasks"
+                                            onChange={toggleAllVisible}
+                                            checked={allVisibleSelected}
+                                            ref={(el) => el && (el.indeterminate = someVisibleSelected && !allVisibleSelected)}
+                                            disabled={visibleIds.length === 0}
+                                            className="size-[18px] cursor-pointer accent-blue-600 disabled:cursor-not-allowed"
                                         />
                                     </th>
                                     <th className="px-4 pl-0 py-3">Title</th>
@@ -180,6 +213,7 @@ const ProjectTasks = ({ tasks }) => {
                                     <th className="px-4 py-3">Status</th>
                                     <th className="px-4 py-3">Assignee</th>
                                     <th className="px-4 py-3">Due Date</th>
+                                    <th className="w-10"><span className="sr-only">Actions</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -191,18 +225,15 @@ const ProjectTasks = ({ tasks }) => {
                                         return (
                                             <tr
                                                 key={task.id}
-                                                onClick={() => navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`)}
+                                                onClick={() => openTask(task)}
                                                 className=" border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all cursor-pointer"
                                             >
-                                                <td onClick={e => e.stopPropagation()} className="pl-2 pr-1">
+                                                <td onClick={e => e.stopPropagation()} className="pl-3 pr-2">
                                                     <input
                                                         type="checkbox"
-                                                        className="size-3 accent-zinc-600 dark:accent-zinc-500"
-                                                        onChange={() =>
-                                                            selectedTasks.includes(task.id)
-                                                                ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id))
-                                                                : setSelectedTasks((prev) => [...prev, task.id])
-                                                        }
+                                                        aria-label={`Select ${task.title}`}
+                                                        className="size-[18px] cursor-pointer accent-blue-600"
+                                                        onChange={() => toggleTask(task.id)}
                                                         checked={selectedTasks.includes(task.id)}
                                                     />
                                                 </td>
@@ -231,10 +262,14 @@ const ProjectTasks = ({ tasks }) => {
                                                     </select>
                                                 </td>
                                                 <td className="px-4 py-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <img src={task.assignee?.image} className="size-5 rounded-full" alt="avatar" />
-                                                        {task.assignee?.name || "-"}
-                                                    </div>
+                                                    {task.assignee ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <img src={task.assignee.image} className="size-5 rounded-full" alt="" />
+                                                            {task.assignee.name}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-zinc-400 dark:text-zinc-500 italic">Unassigned</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
@@ -242,12 +277,15 @@ const ProjectTasks = ({ tasks }) => {
                                                         {format(new Date(task.dueDate), "dd MMMM")}
                                                     </div>
                                                 </td>
+                                                <td className="pr-2">
+                                                    <TaskActionsMenu onOpen={() => openTask(task)} onDelete={() => handleDelete([task.id])} />
+                                                </td>
                                             </tr>
                                         );
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="7" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
+                                        <td colSpan="8" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
                                             No tasks found for the selected filters.
                                         </td>
                                     </tr>
@@ -266,17 +304,17 @@ const ProjectTasks = ({ tasks }) => {
                                 return (
                                     <div key={task.id} className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-2">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
-                                            <input
-                                                type="checkbox"
-                                                className="size-4 accent-zinc-600 dark:accent-zinc-500"
-                                                onChange={() =>
-                                                    selectedTasks.includes(task.id)
-                                                        ? setSelectedTasks(selectedTasks.filter((i) => i !== task.id))
-                                                        : setSelectedTasks((prev) => [...prev, task.id])
-                                                }
-                                                checked={selectedTasks.includes(task.id)}
-                                            />
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Select ${task.title}`}
+                                                    className="size-5 cursor-pointer accent-blue-600"
+                                                    onChange={() => toggleTask(task.id)}
+                                                    checked={selectedTasks.includes(task.id)}
+                                                />
+                                                <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
+                                            </div>
+                                            <TaskActionsMenu onOpen={() => openTask(task)} onDelete={() => handleDelete([task.id])} />
                                         </div>
 
                                         <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
@@ -305,8 +343,14 @@ const ProjectTasks = ({ tasks }) => {
                                         </div>
 
                                         <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                                            <img src={task.assignee?.image} className="size-5 rounded-full" alt="avatar" />
-                                            {task.assignee?.name || "-"}
+                                            {task.assignee ? (
+                                                <>
+                                                    <img src={task.assignee.image} className="size-5 rounded-full" alt="" />
+                                                    {task.assignee.name}
+                                                </>
+                                            ) : (
+                                                <span className="text-zinc-400 dark:text-zinc-500 italic">Unassigned</span>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">

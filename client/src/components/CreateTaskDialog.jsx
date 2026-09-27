@@ -2,17 +2,21 @@ import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { addTask } from "../features/workspaceSlice";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 
+const RequiredMark = () => <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>;
+
 export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId }) {
     const { getToken } = useAuth();
+    const { user } = useUser();
     const dispatch = useDispatch();
     const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
     const project = currentWorkspace?.projects.find((p) => p.id === projectId);
     const teamMembers = project?.members || [];
+    const isProjectMember = teamMembers.some((member) => member.user.id === user?.id);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
@@ -25,8 +29,11 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         dueDate: "",
     });
 
+    const isValid = formData.title.trim() !== "" && formData.dueDate !== "";
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!isValid) return;
         setIsSubmitting(true);
 
         try {
@@ -60,8 +67,8 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Title */}
                     <div className="space-y-1">
-                        <label htmlFor="title" className="text-sm font-medium">Title</label>
-                        <input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Task title" className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                        <label htmlFor="title" className="text-sm font-medium">Title<RequiredMark /></label>
+                        <input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Task title" className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
                     </div>
 
                     {/* Description */}
@@ -96,7 +103,14 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                     {/* Assignee and Status */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-sm font-medium">Assignee</label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium">Assignee</label>
+                                {isProjectMember && formData.assigneeId !== user.id && (
+                                    <button type="button" onClick={() => setFormData({ ...formData, assigneeId: user.id })} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                                        Assign to me
+                                    </button>
+                                )}
+                            </div>
                             <select value={formData.assigneeId} onChange={(e) => setFormData({ ...formData, assigneeId: e.target.value })} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" >
                                 <option value="">Unassigned</option>
                                 {teamMembers.map((member) => (
@@ -119,10 +133,10 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
 
                     {/* Due Date */}
                     <div className="space-y-1">
-                        <label className="text-sm font-medium">Due Date</label>
+                        <label htmlFor="dueDate" className="text-sm font-medium">Due Date<RequiredMark /></label>
                         <div className="flex items-center gap-2">
                             <CalendarIcon className="size-5 text-zinc-500 dark:text-zinc-400" />
-                            <input type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" />
+                            <input id="dueDate" type="date" required value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" />
                         </div>
                         {formData.dueDate && (
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -132,11 +146,12 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                     </div>
 
                     {/* Footer */}
-                    <div className="flex justify-end gap-2 pt-2">
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <p className="mr-auto text-xs text-zinc-500 dark:text-zinc-400"><span className="text-red-500">*</span> Required</p>
                         <button type="button" onClick={() => setShowCreateTask(false)} className="rounded border border-zinc-300 dark:border-zinc-700 px-5 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" >
                             Cancel
                         </button>
-                        <button type="submit" disabled={isSubmitting} className="rounded px-5 py-2 text-sm bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white dark:text-zinc-200 transition" >
+                        <button type="submit" disabled={!isValid || isSubmitting} title={!isValid ? "Fill in the required fields" : undefined} className="rounded px-5 py-2 text-sm bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white dark:text-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed" >
                             {isSubmitting ? "Creating..." : "Create Task"}
                         </button>
                     </div>
