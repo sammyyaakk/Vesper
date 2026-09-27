@@ -53,15 +53,13 @@ export const update = async (userId: string, taskId: string, data: Prisma.TaskUn
 };
 
 export const remove = async (userId: string, taskIds: string[]) => {
-    const tasks = await prisma.task.findMany({
-        where: { id: { in: taskIds } },
-    });
-    if (tasks.length === 0) throw AppError.notFound("Task not found");
+    const ids = [...new Set(taskIds)];
+    const tasks = await prisma.task.findMany({ where: { id: { in: ids } }, select: { projectId: true } });
+    if (tasks.length !== ids.length) throw AppError.notFound("Task not found");
 
-    // TODO(phase-2) #2
-    await requireProjectLead(tasks[0]!.projectId, userId);
+    for (const projectId of new Set(tasks.map((task) => task.projectId))) {
+        await requireProjectLead(projectId, userId);
+    }
 
-    await prisma.task.deleteMany({
-        where: { id: { in: taskIds } },
-    });
+    await prisma.task.deleteMany({ where: { id: { in: ids } } });
 };

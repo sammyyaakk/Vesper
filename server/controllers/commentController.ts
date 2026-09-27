@@ -11,6 +11,6 @@ export const addComment = async (req: Request, res: Response) => {
 
 export const getTaskComments = async (req: Request, res: Response) => {
     const { taskId } = parse(commentParamsSchema, req.params);
-    const comments = await commentService.listForTask(taskId);
+    const comments = await commentService.listForTask(getUserId(req), taskId);
     return res.json({ comments });
 };

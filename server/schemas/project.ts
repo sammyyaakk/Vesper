@@ -5,7 +5,6 @@ import { clerkId, optionalDate, optionalText, uuid } from "./common.js";
 const name = z.string().trim().min(1, "Name is required").max(100);
 
 const projectFields = {
-    workspaceId: clerkId,
     description: optionalText,
     status: z.enum(ProjectStatus).optional(),
     priority: z.enum(Priority).optional(),
@@ -21,6 +20,7 @@ const endDateIssue = { message: "End date must be on or after the start date", p
 export const createProjectSchema = z
     .object({
         ...projectFields,
+        workspaceId: clerkId,
         name,
         teamLeadEmail: z.email("Team lead must be a valid email"),
         teamMembers: z.array(z.email()).max(100).optional(),

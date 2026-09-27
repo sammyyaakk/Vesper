@@ -58,6 +58,25 @@ export const requireProjectMember = async (
     denied = AppError.forbidden("You are not member of this project"),
 ) => {
     const project = await requireProject(projectId);
-    if (!project.members.some((member) => member.userId === userId)) throw denied;
+    const isMember = project.teamLead === userId || project.members.some((member) => member.userId === userId);
+    if (!isMember) throw denied;
     return project;
+};
+
+export const requireProjectManager = async (
+    projectId: string,
+    userId: string,
+    denied = AppError.forbidden("You don't have permission to manage this project"),
+) => {
+    const project = await requireProject(projectId);
+    if (project.teamLead === userId) return project;
+    const workspace = await requireWorkspace(project.workspaceId);
+    if (!hasWorkspaceRole(workspace, userId, "ADMIN")) throw denied;
+    return project;
+};
+
+export const requireTaskProjectMember = async (taskId: string, userId: string) => {
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+    if (!task) throw AppError.notFound("Task not found");
+    await requireProjectMember(task.projectId, userId);
 };

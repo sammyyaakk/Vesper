@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { ErrorRequestHandler } from "express";
 import { AppError } from "../utils/AppError.js";
 
@@ -15,6 +16,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
 
     if (err instanceof AppError) {
         res.status(err.statusCode).json(err.details ? { message: err.message, errors: err.details } : { message: err.message });
+        return;
+    }
+
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        res.status(409).json({ message: "That record already exists" });
         return;
     }
 
