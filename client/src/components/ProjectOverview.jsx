@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getProjectProgress } from "../utils/projectProgress";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, UsersIcon, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
@@ -78,10 +79,10 @@ const ProjectOverview = () => {
                                                 {project.members.length} members
                                             </div>
                                         )}
-                                        {project.end_date && (
+                                        {project.endDate && (
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-3 h-3" />
-                                                {format(new Date(project.end_date), "MMM d, yyyy")}
+                                                {format(new Date(project.endDate), "MMM d, yyyy")}
                                             </div>
                                         )}
                                     </div>
@@ -90,10 +91,10 @@ const ProjectOverview = () => {
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-zinc-500 dark:text-zinc-500">Progress</span>
-                                        <span className="text-zinc-600 dark:text-zinc-400">{project.progress || 0}%</span>
+                                        <span className="text-zinc-600 dark:text-zinc-400">{getProjectProgress(project.tasks)}%</span>
                                     </div>
                                     <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded h-1.5">
-                                        <div className="h-1.5 bg-blue-500 rounded" style={{ width: `${project.progress || 0}%` }} />
+                                        <div className="h-1.5 bg-blue-500 rounded" style={{ width: `${getProjectProgress(project.tasks)}%` }} />
                                     </div>
                                 </div>
                             </Link>

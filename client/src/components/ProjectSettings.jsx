@@ -18,9 +18,8 @@ export default function ProjectSettings({ project }) {
         description: "Initial launch for new web platform.",
         status: "PLANNING",
         priority: "MEDIUM",
-        start_date: "2025-09-10",
-        end_date: "2025-10-15",
-        progress: 30,
+        startDate: "2025-09-10",
+        endDate: "2025-10-15",
     });
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -99,18 +98,12 @@ export default function ProjectSettings({ project }) {
                     <div className="space-y-4 grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className={labelClasses}>Start Date</label>
-                            <input type="date" value={format(formData.start_date, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, start_date: new Date(e.target.value) })} className={inputClasses} />
+                            <input type="date" value={format(formData.startDate, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, startDate: new Date(e.target.value) })} className={inputClasses} />
                         </div>
                         <div className="space-y-2">
                             <label className={labelClasses}>End Date</label>
-                            <input type="date" value={format(formData.end_date, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, end_date: new Date(e.target.value) })} className={inputClasses} />
+                            <input type="date" value={format(formData.endDate, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, endDate: new Date(e.target.value) })} className={inputClasses} />
                         </div>
-                    </div>
-
-                    {/* Progress */}
-                    <div className="space-y-2">
-                        <label className={labelClasses}>Progress: {formData.progress}%</label>
-                        <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={(e) => setFormData({ ...formData, progress: Number(e.target.value) })} className="w-full accent-blue-500 dark:accent-blue-400" />
                     </div>
 
                     {/* Save Button */}
@@ -139,7 +132,7 @@ export default function ProjectSettings({ project }) {
                             {project.members.map((member, index) => (
                                 <div key={index} className="flex items-center justify-between px-3 py-2 rounded dark:bg-zinc-800 text-sm text-zinc-900 dark:text-zinc-300" >
                                     <span> {member?.user?.email || "Unknown"} </span>
-                                    {project.team_lead === member.user.id && <span className="px-2 py-0.5 rounded-xs ring ring-zinc-200 dark:ring-zinc-600">Team Lead</span>}
+                                    {project.teamLead === member.user.id && <span className="px-2 py-0.5 rounded-xs ring ring-zinc-200 dark:ring-zinc-600">Team Lead</span>}
                                 </div>
                             ))}
                         </div>

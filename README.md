@@ -9,8 +9,8 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 ## Features
 
 - Sign-in with email or Google; workspaces are Clerk Organizations with **Admin** / **Member** roles
-- Projects with status, priority, dates, a team lead and project members
-- Tasks with type, priority, status, assignee and due date; comments on tasks
+- Projects with status, priority, dates, a team lead and project members; progress calculated from completed tasks
+- Tasks with type, priority, status, optional assignee and a required due date; comments on tasks
 - Dashboard, project analytics and calendar views; light/dark theme
 - Background jobs: Clerk → database sync, task-assignment email, due-date reminder
 
@@ -19,7 +19,8 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 | Layer | Tech |
 |---|---|
 | Frontend | React 19, Vite 7, Tailwind CSS v4, Redux Toolkit, React Router, Axios, Recharts |
-| Backend | Node.js, Express 5 (ESM) |
+| Backend | Node.js, Express 5, TypeScript (strict) |
+| Logging | [Pino](https://getpino.io) structured JSON logs with per-request IDs |
 | Database | PostgreSQL on [Neon](https://neon.tech), via Prisma 6 and the Neon serverless driver adapter |
 | Auth | [Clerk](https://clerk.com): users, sessions, Organizations (workspaces) |
 | Background jobs | [Inngest](https://www.inngest.com): event-driven functions with retries and sleeps |
@@ -35,12 +36,14 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
              │ REST + "Authorization: Bearer <Clerk session JWT>"
              ▼                               │ webhooks: user.* / organization.*
 ┌──────────────────────────┐                 ▼
-│  Express API             │        ┌──────────────┐
-│  clerkMiddleware →       │◄───────│   Inngest    │  runs functions by calling
-│  protect → routes →      │  HTTP  │              │  POST /api/inngest
-│  controllers             │───────►│              │
-│                          │ events └──────────────┘
-│  /api/inngest: functions │   (app/task.assigned)
+│  Express API (TypeScript)│        ┌──────────────┐
+│  requestLogger →         │◄───────│   Inngest    │  runs functions by calling
+│  clerkMiddleware →       │  HTTP  │              │  POST /api/inngest
+│  protect → routes →      │───────►│              │
+│  controllers → services  │ events └──────────────┘
+│  (authorization) →       │   (app/task.assigned)
+│  errorHandler            │
+│  /api/inngest: functions │
 └────────────┬─────────────┘
              │ Prisma
              ▼
@@ -49,11 +52,15 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 └──────────────────────────┘        └──────────────┘    reminder emails
 ```
 
-**Request flow.** The client gets a short-lived session JWT from Clerk and sends it with each API call. `clerkMiddleware()` verifies it, and `protect` rejects requests with no signed-in user. The controllers then read and write Postgres through Prisma.
+**Request flow.** The client gets a short-lived session JWT from Clerk and sends it with each API call. `requestLogger` assigns a request ID (returned as `X-Request-Id`). `clerkMiddleware()` verifies the token, and `protect` rejects requests with no signed-in user.
+
+**Server layers.** *Controllers* only handle HTTP: they read the user, body and params, call a service, and send the response. *Services* hold the business logic and data access (Prisma). Every permission check lives in one module, `services/authorization.ts` (`requireWorkspaceRole`, `requireProjectLead`, `requireProjectMember`, …).
+
+**Errors.** Services throw `AppError`s (400/403/404/…). Express 5 forwards them to a single `errorHandler`, which returns the status and message. Unexpected errors are logged with their stack and the request ID; the client only gets `500 {"message":"Internal server error","requestId":"…"}`.
 
 **Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.created`, `clerk/organization.created`, …), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces.
 
-**Background work.** Creating a task emits `app/task.assigned`. An Inngest function emails the assignee, sleeps until the due date, and sends a reminder if the task isn't done by then.
+**Background work.** Creating a task emits `app/task.assigned`. If the task has an assignee, an Inngest function emails them, sleeps until the due date, and sends a reminder if the task isn't done by then.
 
 ### Data model
 
@@ -91,14 +98,22 @@ client/                 React app
   src/components/       UI components and dialogs
   src/features/         Redux slices
   src/configs/api.js    Axios instance (base URL from VITE_BASEURL)
-server/                 Express API
-  server.js             app setup, middleware, routes, Inngest endpoint
-  middlewares/          auth guard
-  routes/, controllers/ one router + controller per resource
+  src/utils/            shared helpers (e.g. project progress)
+server/                 Express API (TypeScript)
+  server.ts             app setup, middleware order, routes
+  routes/               one router per resource
+  controllers/          HTTP only: read the request, call a service, send JSON
+  services/             business logic and data access
+    authorization.ts    all permission checks
+  middlewares/          auth guard, request logger, error handler
   inngest/              background functions (Clerk sync, emails)
-  configs/              Prisma client, mailer
+  configs/              Prisma client, logger, mailer
+  utils/AppError.ts     typed HTTP errors
+  scripts/              dev tooling (sync:clerk)
   prisma/               schema and migrations
 ```
+
+Server scripts (from `server/`): `npm run dev` (watch mode), `npm run typecheck`, `npm run build` (compile to `dist/`), `npm start` (run the build), `npm run sync:clerk`.
 
 ---
 
@@ -140,7 +155,8 @@ cp client/.env.example client/.env
 
 | File | Variable | Value |
 |---|---|---|
-| `server/.env` | `NODE_ENV` | `development` |
+| `server/.env` | `NODE_ENV` | `development` (enables readable dev logs) |
+| | `LOG_LEVEL` | Optional: `debug`, `info` (default), `warn`, `error` |
 | | `CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | | `CLERK_SECRET_KEY` | Clerk secret key (server only, never in the client) |
 | | `DATABASE_URL` | Neon pooled connection string |
@@ -161,7 +177,7 @@ npx prisma migrate deploy
 
 ```bash
 # 1. API: http://localhost:5000
-cd server && npm run server
+cd server && npm run dev
 
 # 2. Client: http://localhost:5173
 cd client && npm run dev
@@ -176,7 +192,7 @@ The Inngest dev server is pinned to **1.13.7** because newer releases reject the
 
 In production, Clerk sends webhooks to Inngest Cloud, which calls the API. Locally, Clerk can't reach `localhost`, so signing up doesn't create a row in the `User` table. Until a user and workspace are synced, the app keeps showing the "Create organization" screen.
 
-To sync locally, sign up in the app and create a workspace. Then, with the API and the Inngest dev server running, replay the Clerk events into the dev server ([`server/scripts/sync-clerk.js`](server/scripts/sync-clerk.js)):
+To sync locally, sign up in the app and create a workspace. Then, with the API and the Inngest dev server running, replay the Clerk events into the dev server ([`server/scripts/sync-clerk.ts`](server/scripts/sync-clerk.ts)):
 
 ```bash
 cd server
@@ -191,7 +207,7 @@ This sends the same `clerk/user.created` and `clerk/organization.created` events
 ## Roadmap
 
 - [x] **Phase 0**: Setup, rebrand, local environment, documentation
-- [ ] **Phase 1**: Backend in TypeScript (strict); routes → controllers → services layering; central authorization helpers; typed errors; structured logging
+- [x] **Phase 1**: Backend in TypeScript (strict); routes → controllers → services layering; central authorization module; typed errors and a central error handler; structured logging with request IDs; task UX fixes and derived project progress
 - [ ] **Phase 2**: Authorization and input-validation audit with integration tests (Vitest + Supertest), Zod request schemas, CORS lock-down, safe email rendering
 - [ ] **Phase 3**: Focused, cursor-paginated endpoints; indexes chosen from query patterns; latency benchmarks on a 50k-task dataset
 - [ ] **Phase 4**: Redis caching with explicit invalidation; per-user rate limiting

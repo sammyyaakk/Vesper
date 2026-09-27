@@ -70,7 +70,7 @@ export default function StatsGrid() {
                 ),
                 overdueIssues: currentWorkspace.projects.reduce(
                     (acc, project) =>
-                        acc + project.tasks.filter((t) => t.due_date < new Date()).length,
+                        acc + project.tasks.filter((t) => t.dueDate < new Date()).length,
                     0
                 ),
             });

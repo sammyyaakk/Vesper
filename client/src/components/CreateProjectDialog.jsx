@@ -17,11 +17,10 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         description: "",
         status: "PLANNING",
         priority: "MEDIUM",
-        start_date: "",
-        end_date: "",
-        team_members: [],
-        team_lead: "",
-        progress: 0,
+        startDate: "",
+        endDate: "",
+        teamMembers: [],
+        teamLeadEmail: "",
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +28,7 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (!formData.team_lead) {
+            if (!formData.teamLeadEmail) {
                 return toast.error("Please select a team lead");
             }
             setIsSubmitting(true);
@@ -44,7 +43,7 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     };
 
     const removeTeamMember = (email) => {
-        setFormData((prev) => ({ ...prev, team_members: prev.team_members.filter(m => m !== email) }));
+        setFormData((prev) => ({ ...prev, teamMembers: prev.teamMembers.filter(m => m !== email) }));
     };
 
     if (!isDialogOpen) return null;
@@ -103,18 +102,18 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm mb-1">Start Date</label>
-                            <input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
+                            <input type="date" value={formData.startDate} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
                         </div>
                         <div>
                             <label className="block text-sm mb-1">End Date</label>
-                            <input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} min={formData.start_date && new Date(formData.start_date).toISOString().split('T')[0]} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
+                            <input type="date" value={formData.endDate} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} min={formData.startDate && new Date(formData.startDate).toISOString().split('T')[0]} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
                         </div>
                     </div>
 
                     {/* Lead */}
                     <div>
                         <label className="block text-sm mb-1">Project Lead</label>
-                        <select value={formData.team_lead} onChange={(e) => setFormData({ ...formData, team_lead: e.target.value, team_members: e.target.value ? [...new Set([...formData.team_members, e.target.value])] : formData.team_members, })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" >
+                        <select value={formData.teamLeadEmail} onChange={(e) => setFormData({ ...formData, teamLeadEmail: e.target.value, teamMembers: e.target.value ? [...new Set([...formData.teamMembers, e.target.value])] : formData.teamMembers, })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" >
                             <option value="">No lead</option>
                             {currentWorkspace?.members?.map((member) => (
                                 <option key={member.user.email} value={member.user.email}>
@@ -129,14 +128,14 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                         <label className="block text-sm mb-1">Team Members</label>
                         <select className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
                             onChange={(e) => {
-                                if (e.target.value && !formData.team_members.includes(e.target.value)) {
-                                    setFormData((prev) => ({ ...prev, team_members: [...prev.team_members, e.target.value] }));
+                                if (e.target.value && !formData.teamMembers.includes(e.target.value)) {
+                                    setFormData((prev) => ({ ...prev, teamMembers: [...prev.teamMembers, e.target.value] }));
                                 }
                             }}
                         >
                             <option value="">Add team members</option>
                             {currentWorkspace?.members
-                                ?.filter((email) => !formData.team_members.includes(email))
+                                ?.filter((email) => !formData.teamMembers.includes(email))
                                 .map((member) => (
                                     <option key={member.user.email} value={member.email}>
                                         {member.user.email}
@@ -144,9 +143,9 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                                 ))}
                         </select>
 
-                        {formData.team_members.length > 0 && (
+                        {formData.teamMembers.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-2">
-                                {formData.team_members.map((email) => (
+                                {formData.teamMembers.map((email) => (
                                     <div key={email} className="flex items-center gap-1 bg-blue-200/50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-2 py-1 rounded-md text-sm" >
                                         {email}
                                         <button type="button" onClick={() => removeTeamMember(email)} className="ml-1 hover:bg-blue-300/30 dark:hover:bg-blue-500/30 rounded" >
