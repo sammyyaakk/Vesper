@@ -1,4 +1,5 @@
 import { Inngest } from "inngest";
+import type { WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import sendEmail from "../configs/nodemailer.js";
 
@@ -99,7 +100,8 @@ const syncWorkspaceMemberCreation = inngest.createFunction({ id: "sync-workspace
         data: {
             userId: data.user_id,
             workspaceId: data.organization_id,
-            role: String(data.role_name).toUpperCase(),
+            // TODO(phase-2) #18: map Clerk role names explicitly
+            role: String(data.role_name).toUpperCase() as WorkspaceRole,
         },
     });
 });
@@ -108,10 +110,11 @@ const syncWorkspaceMemberCreation = inngest.createFunction({ id: "sync-workspace
 const sendBookingConfirmationEmail = inngest.createFunction({ id: "send-task-assignment-mail" }, { event: "app/task.assigned" }, async ({ event, step }) => {
     const { taskId, origin } = event.data;
 
-    const task = await prisma.task.findUnique({
+    // TODO(phase-2) #19: handle a deleted task
+    const task = (await prisma.task.findUnique({
         where: { id: taskId },
         include: { assignee: true, project: true },
-    });
+    }))!;
 
     await sendEmail({
         to: task.assignee.email,

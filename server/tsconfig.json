@@ -16,15 +16,11 @@
         "noImplicitReturns": true,
         "noFallthroughCasesInSwitch": true,
 
-        // Incremental migration: .js files compile alongside .ts but aren't type-checked
-        "allowJs": true,
-        "checkJs": false,
-
         "outDir": "dist",
         "rootDir": ".",
         "sourceMap": true,
         "skipLibCheck": true
     },
-    "include": ["**/*.ts", "**/*.js"],
+    "include": ["**/*.ts"],
     "exclude": ["node_modules", "dist"]
 }

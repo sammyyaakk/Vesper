@@ -1,10 +1,13 @@
+import type { Request, Response } from "express";
+import { getUserId } from "../middlewares/authMiddleware.js";
+import { legacyErrorMessage } from "../utils/legacyError.js";
 import prisma from "../configs/prisma.js";
 
 // Get all workspaces for user
-export const getUserWorkspaces = async (req, res) => {
+export const getUserWorkspaces = async (req: Request, res: Response) => {
     try {
 
-        const { userId } = await req.auth();
+        const userId = getUserId(req);
         const workspaces = await prisma.workspace.findMany({
             where: {
                 members: { some: { userId: userId } }
@@ -20,9 +23,9 @@ export const getUserWorkspaces = async (req, res) => {
                 owner: true
             }
         });
-        res.json({ workspaces });
+        return res.json({ workspaces });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };

@@ -5,11 +5,11 @@
   "main": "dist/server.js",
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "tsx watch server.js",
+    "dev": "tsx watch server.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "sync:clerk": "node scripts/sync-clerk.js"
+    "sync:clerk": "tsx scripts/sync-clerk.ts"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +20,7 @@
     "@types/express": "5.0.6",
     "@types/node": "24.19.0",
     "@types/nodemailer": "7.0.12",
+    "@types/ws": "8.18.1",
     "prisma": "6.18.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3"

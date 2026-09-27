@@ -1,9 +1,12 @@
+import type { Request, Response } from "express";
+import { getUserId } from "../middlewares/authMiddleware.js";
+import { legacyErrorMessage } from "../utils/legacyError.js";
 import prisma from "../configs/prisma.js";
 
 // Add comment
-export const addComment = async (req, res) => {
+export const addComment = async (req: Request, res: Response) => {
     try {
-        const { userId } = await req.auth();
+        const userId = getUserId(req);
         const { content,taskId } = req.body;
 
         // check if user is projectmember
@@ -12,7 +15,8 @@ export const addComment = async (req, res) => {
         });
         
         const project = await prisma.project.findUnique({
-            where: { id: task.projectId },
+            // TODO(phase-2) #7: handle a missing task
+            where: { id: task!.projectId },
             include: { members: { include: { user: true } } },
         });
 
@@ -26,21 +30,21 @@ export const addComment = async (req, res) => {
 
         const comment = await prisma.comment.create({ data: { taskId, content, userId }, include: { user: true } });
         
-        res.json({comment});
+        return res.json({comment});
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };
 
 // Get comments for task
-export const getTaskComments = async (req, res) => {
+export const getTaskComments = async (req: Request<{ taskId: string }>, res: Response) => {
     try {
         const { taskId } = req.params;
         const comments = await prisma.comment.findMany({ where: { taskId }, include: { user: true } });
-        res.json({ comments });
+        return res.json({ comments });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };

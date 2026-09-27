@@ -9,7 +9,13 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-const sendEmail = async ({ to, subject, body }) => {
+interface SendEmailInput {
+    to: string;
+    subject: string;
+    body: string;
+}
+
+const sendEmail = async ({ to, subject, body }: SendEmailInput) => {
     console.log(to, subject, body);
     const response = await transporter.sendMail({
         from: process.env.SENDER_EMAIL,

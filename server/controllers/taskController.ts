@@ -1,11 +1,14 @@
+import type { Request, Response } from "express";
+import { getUserId } from "../middlewares/authMiddleware.js";
+import { legacyErrorMessage } from "../utils/legacyError.js";
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
 
 // Create task
-export const createTask = async (req, res) => {
+export const createTask = async (req: Request, res: Response) => {
     try {
 
-        const { userId } = await req.auth();
+        const userId = getUserId(req);
         const { projectId, title, description, type, status, priority, assigneeId, due_date } = req.body;
         const origin = req.get('origin');
 
@@ -50,16 +53,16 @@ export const createTask = async (req, res) => {
             }
         })
 
-        res.json({ task: taskWithAssignee, message: "Task created successfully" });
+        return res.json({ task: taskWithAssignee, message: "Task created successfully" });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };
 
 
 // Update task
-export const updateTask = async (req, res) => {
+export const updateTask = async (req: Request<{ id: string }>, res: Response) => {
     try {
 
         const task = await prisma.task.findUnique({
@@ -70,7 +73,7 @@ export const updateTask = async (req, res) => {
             return res.status(404).json({ message: "Task not found" });
         }
 
-        const { userId } = await req.auth();
+        const userId = getUserId(req);
 
         const project = await prisma.project.findUnique({
             where: { id: task.projectId },
@@ -88,18 +91,18 @@ export const updateTask = async (req, res) => {
             data: req.body,
         });
 
-        res.json({ message: "Task updated successfully", task: updatedTask });
+        return res.json({ message: "Task updated successfully", task: updatedTask });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };
 
 // Delete task
-export const deleteTask = async (req, res) => {
+export const deleteTask = async (req: Request, res: Response) => {
     try {
 
-        const { userId } = await req.auth();
+        const userId = getUserId(req);
         const { tasksIds } = req.body;
 
         const tasks = await prisma.task.findMany({
@@ -111,7 +114,8 @@ export const deleteTask = async (req, res) => {
         }
 
         const project = await prisma.project.findUnique({
-            where: { id: tasks[0].projectId },
+            // TODO(phase-2) #2
+            where: { id: tasks[0]!.projectId },
             include: { members: { include: { user: true } } },
         });
 
@@ -125,9 +129,9 @@ export const deleteTask = async (req, res) => {
             where: { id: { in: tasksIds } },
         });
 
-        res.json({ message: "Task deleted successfully" });
+        return res.json({ message: "Task deleted successfully" });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.code || error.message });
+        return res.status(500).json({ message: legacyErrorMessage(error) });
     }
 };

@@ -15,7 +15,11 @@ if (process.env.NODE_ENV === "production") {
     process.exit(1);
 }
 
-const clerk = async (path) => {
+// Only the fields this script reads; the full payloads are forwarded to Inngest unchanged
+interface ClerkUser { id: string }
+interface ClerkOrganization { id: string; name: string; created_at: number }
+
+const clerk = async <T>(path: string): Promise<T> => {
     const res = await fetch(`https://api.clerk.com/v1${path}`, {
         headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
     });
@@ -23,7 +27,7 @@ const clerk = async (path) => {
     return res.json();
 };
 
-const sendEvent = async (name, data) => {
+const sendEvent = async (name: string, data: unknown) => {
     const res = await fetch(`${INNGEST_DEV_URL}/e/local-dev`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -32,8 +36,8 @@ const sendEvent = async (name, data) => {
     if (!res.ok) throw new Error(`Inngest dev server returned ${res.status} for ${name}`);
 };
 
-const users = await clerk("/users?limit=100");
-const { data: orgs } = await clerk("/organizations?limit=100");
+const users = await clerk<ClerkUser[]>("/users?limit=100");
+const { data: orgs } = await clerk<{ data: ClerkOrganization[] }>("/organizations?limit=100");
 const [mode, ...orgIds] = process.argv.slice(2);
 
 if (mode !== "send") {
