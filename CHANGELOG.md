@@ -2,6 +2,42 @@
 
 Each phase lists what changed and why.
 
+## Phase 1: TypeScript foundation
+
+The goal was a typed, layered backend **without changing behaviour**, except for the listed product fixes. Known security bugs were deliberately **not** fixed here: Phase 2 fixes each one with a failing test first, and their locations are marked `TODO(phase-2) #n`.
+
+### TypeScript
+- The whole server is strict TypeScript (`strict`, `noUncheckedIndexedAccess`, `noImplicitReturns`), migrated file by file with `allowJs` so the app ran after every step. `allowJs` is now off.
+- `tsx watch` for development (replaces nodemon); `tsc` builds to `dist/` for production; `npm run typecheck` is the gate.
+- Strict null checks exposed real bugs: a property typo that disabled the duplicate-member check, null crashes on unknown IDs, and a string written into an enum column. They're recorded for Phase 2.
+
+### Architecture
+- **Layers:** routes → controllers (HTTP only) → services (business logic, Prisma) → database. Controllers shrank from ~330 to ~44 lines.
+- **Authorization module:** every permission check lives in `services/authorization.ts` (`requireWorkspace`, `requireWorkspaceRole`, `requireProject`, `requireProjectLead`, `requireProjectMember`), replacing seven inline copies. This is the single place Phase 2 hardens and tests.
+- **Errors:** `AppError` plus one error-handling middleware (Express 5 forwards async errors). 500 responses no longer leak internal messages. Malformed JSON gets a JSON 400.
+
+### Observability
+- Pino structured logs; one line per request with method, URL, status and duration; a request ID in `X-Request-Id` and in 500 bodies.
+- Authorization headers and cookies are never logged; emails are no longer logged with recipients and bodies.
+
+### Data model
+- camelCase field names in code via Prisma `@map` (`teamLead`, `dueDate`, `startDate`, `endDate`, `imageUrl`). No columns were renamed; the migration SQL was reviewed first.
+- **Optional task assignee:** tasks can be unassigned; deleting a user now leaves their tasks unassigned instead of deleting them (`ON DELETE SET NULL`).
+- **Project progress is derived** from completed tasks (done ÷ total) instead of a manually set number. The `progress` column and slider are gone.
+- Data migration fixing users stored with the name `"null null"`.
+
+### Product fixes
+- **Task deletion:** an always-visible Delete button with a count, a ⋮ menu on each row, larger checkboxes, select-all over the visible tasks, and the selection cleared after deleting (previously a stale selection re-sent deleted IDs → "Task not found").
+- **Create task:** required fields are marked, and Create is disabled until Title and Due Date are filled; "Assign to me".
+- The "In Progress" stat no longer counts To Do tasks.
+- The Inngest function `sendBookingConfirmationEmail` (a tutorial leftover) is now `sendTaskAssignmentEmail`.
+
+### Found in this phase, scheduled for Phase 2
+- Custom Clerk role names break the member sync.
+- The assignment-email job crashes and retries if its task was deleted.
+- Deleting a user deletes every project they lead (cascade from the team lead).
+- Task permission rules for self-assignment: members can claim unassigned tasks and update their own tasks' status; admins get lead rights.
+
 ## Phase 0: Setup and rebrand
 
 ### Repository and configuration
