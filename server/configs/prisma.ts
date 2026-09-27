@@ -9,7 +9,7 @@ neonConfig.poolQueryViaFetch = true;
 
 const connectionString = `${process.env.DATABASE_URL}`;
 
-// Reuse one client across hot reloads in development instead of opening a new pool each time
+// Reuse the client across dev hot reloads
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 const adapter = new PrismaNeon({ connectionString });
