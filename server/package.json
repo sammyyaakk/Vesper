@@ -6,7 +6,8 @@
   "scripts": {
     "postinstall": "npx prisma generate",
     "start": "prisma generate && node server.js",
-    "server": "nodemon server.js"
+    "server": "nodemon server.js",
+    "sync:clerk": "node scripts/sync-clerk.js"
   },
   "keywords": [],
   "author": "",
