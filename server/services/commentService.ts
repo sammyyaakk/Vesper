@@ -1,22 +1,13 @@
 import prisma from "../configs/prisma.js";
-import { requireProjectMember } from "./authorization.js";
-
-export interface AddCommentInput {
-    taskId: string;
-    content: string;
-}
+import type { AddCommentInput } from "../schemas/comment.js";
+import { requireTaskAccess } from "./authorization.js";
 
 export const add = async (userId: string, { taskId, content }: AddCommentInput) => {
-    const task = await prisma.task.findUnique({
-        where: { id: taskId },
-    });
-
-    // TODO(phase-2) #7: handle a missing task
-    await requireProjectMember(task!.projectId, userId);
-
+    await requireTaskAccess(taskId, userId);
     return prisma.comment.create({ data: { taskId, content, userId }, include: { user: true } });
 };
 
-// TODO(phase-2) #1
-export const listForTask = (taskId: string) =>
-    prisma.comment.findMany({ where: { taskId }, include: { user: true } });
+export const listForTask = async (userId: string, taskId: string) => {
+    await requireTaskAccess(taskId, userId);
+    return prisma.comment.findMany({ where: { taskId }, include: { user: true } });
+};

@@ -1,28 +1,7 @@
-import type { Priority, ProjectStatus } from "@prisma/client";
 import prisma from "../configs/prisma.js";
+import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
-import { hasWorkspaceRole, requireProjectLead, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
-
-interface ProjectFields {
-    workspaceId: string;
-    name: string;
-    description?: string;
-    status?: ProjectStatus;
-    priority?: Priority;
-    startDate?: string;
-    endDate?: string;
-}
-
-export interface CreateProjectInput extends ProjectFields {
-    teamLeadEmail: string;
-    teamMembers?: string[];
-}
-
-export interface UpdateProjectInput extends ProjectFields {
-    id: string;
-}
-
-const toDate = (value?: string) => (value ? new Date(value) : null);
+import { requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
 
 export const create = async (userId: string, input: CreateProjectInput) => {
     const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
@@ -34,10 +13,8 @@ export const create = async (userId: string, input: CreateProjectInput) => {
         AppError.forbidden("You don't have permission to create projects in this workspace"),
     );
 
-    const teamLead = await prisma.user.findUnique({
-        where: { email: teamLeadEmail },
-        select: { id: true },
-    });
+    const teamLead = workspace.members.find((member) => member.user.email === teamLeadEmail);
+    if (!teamLead) throw AppError.badRequest("Team lead must be a member of this workspace");
 
     const project = await prisma.project.create({
         data: {
@@ -46,22 +23,20 @@ export const create = async (userId: string, input: CreateProjectInput) => {
             description,
             status,
             priority,
-            // TODO(phase-2) #6: validate team_lead
-            teamLead: teamLead?.id as string,
-            startDate: toDate(startDate),
-            endDate: toDate(endDate),
+            teamLead: teamLead.userId,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
         },
     });
 
-    if (teamMembers && teamMembers.length > 0) {
-        const membersToAdd = workspace.members
-            .filter((member) => teamMembers.includes(member.user.email))
-            .map((member) => member.user.id);
+    const invitedIds = workspace.members
+        .filter((member) => teamMembers?.includes(member.user.email))
+        .map((member) => member.userId);
+    const memberIds = [...new Set([teamLead.userId, ...invitedIds])];
 
-        await prisma.projectMember.createMany({
-            data: membersToAdd.map((memberId) => ({ projectId: project.id, userId: memberId })),
-        });
-    }
+    await prisma.projectMember.createMany({
+        data: memberIds.map((memberId) => ({ projectId: project.id, userId: memberId })),
+    });
 
     return prisma.project.findUnique({
         where: { id: project.id },
@@ -74,39 +49,35 @@ export const create = async (userId: string, input: CreateProjectInput) => {
 };
 
 export const update = async (userId: string, input: UpdateProjectInput) => {
-    const { id, workspaceId, description, name, status, startDate, endDate, priority } = input;
+    const { id, description, name, status, startDate, endDate, priority } = input;
 
-    // TODO(phase-2) #4
-    const workspace = await requireWorkspace(workspaceId);
-    if (!hasWorkspaceRole(workspace, userId, "ADMIN")) {
-        await requireProjectLead(id, userId, AppError.forbidden("You don't have permission to update projects in this workspace"));
-    }
+    await requireProjectManager(id, userId, AppError.forbidden("You don't have permission to update this project"));
 
     return prisma.project.update({
         where: { id },
         data: {
-            workspaceId,
             description,
             name,
             status,
             priority,
-            startDate: toDate(startDate),
-            endDate: toDate(endDate),
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
         },
     });
 };
 
 export const addMember = async (userId: string, projectId: string, email: string) => {
-    const project = await requireProjectLead(projectId, userId, AppError.notFound("Only project lead can add members"));
+    const project = await requireProjectManager(projectId, userId, AppError.forbidden("Only the project lead or a workspace admin can add members"));
+    const workspace = await requireWorkspace(project.workspaceId);
 
-    // TODO(phase-2) #5: revisit existing-member check
-    const existingMember = project.members.find((member) => (member as { email?: string }).email === email);
-    if (existingMember) throw AppError.badRequest("User is already a member");
+    const newMember = workspace.members.find((member) => member.user.email === email);
+    if (!newMember) throw AppError.badRequest("No member of this workspace has that email");
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw AppError.notFound("User not found");
+    if (project.members.some((member) => member.userId === newMember.userId)) {
+        throw AppError.conflict("User is already a member of this project");
+    }
 
     return prisma.projectMember.create({
-        data: { userId: user.id, projectId },
+        data: { userId: newMember.userId, projectId },
     });
 };

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, MoreVertical, Trash } from "lucide-react";
+import { ExternalLink, MoreVertical, Trash, UserMinus, UserPlus } from "lucide-react";
 
 const MENU_WIDTH = 160;
 
-export default function TaskActionsMenu({ onOpen, onDelete }) {
+export default function TaskActionsMenu({ onOpen, onDelete, onClaim, onUnassign }) {
     const [position, setPosition] = useState(null);
     const buttonRef = useRef(null);
     const menuRef = useRef(null);
@@ -64,6 +64,16 @@ export default function TaskActionsMenu({ onOpen, onDelete }) {
                     <button type="button" role="menuitem" onClick={() => run(onOpen)} className={itemClasses}>
                         <ExternalLink className="size-4" /> Open task
                     </button>
+                    {onClaim && (
+                        <button type="button" role="menuitem" onClick={() => run(onClaim)} className={itemClasses}>
+                            <UserPlus className="size-4" /> Assign to me
+                        </button>
+                    )}
+                    {onUnassign && (
+                        <button type="button" role="menuitem" onClick={() => run(onUnassign)} className={itemClasses}>
+                            <UserMinus className="size-4" /> Unassign me
+                        </button>
+                    )}
                     <button type="button" role="menuitem" onClick={() => run(onDelete)} className={`${itemClasses} text-red-600 dark:text-red-400`}>
                         <Trash className="size-4" /> Delete task
                     </button>
