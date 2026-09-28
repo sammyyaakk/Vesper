@@ -7,9 +7,9 @@ import { createRealtime } from "../../realtime/index.js";
 // The test Clerk double accepts "test:<userId>" as a valid session token
 export const tokenFor = (userId: string) => `test:${userId}`;
 
-export const startRealtimeServer = async () => {
+export const startRealtimeServer = async (options: Parameters<typeof createRealtime>[1] = {}) => {
     const httpServer = createServer(app);
-    const io = createRealtime(httpServer);
+    const io = createRealtime(httpServer, options);
     await new Promise<void>((resolve) => httpServer.listen(0, resolve));
     const url = `http://localhost:${(httpServer.address() as AddressInfo).port}`;
     const clients: ClientSocket[] = [];

@@ -2,7 +2,7 @@
 
 Vesper is a multi-tenant project management app. Teams work inside **workspaces**, which contain **projects**, which contain **tasks** with **comments**. Members are assigned tasks, get an email when that happens, and get a reminder when a task is due.
 
-> **Status:** under active development. The current focus is hardening the backend (TypeScript, authorization, validation and tests), then performance, caching and real-time updates. See [Roadmap](#roadmap).
+> **Status:** under active development. Done so far: a hardened TypeScript backend, performance work, Redis caching and rate limiting, and real-time updates. Next: Docker and CI. See [Roadmap](#roadmap).
 
 ---
 
@@ -14,6 +14,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 - Members can claim unassigned tasks and complete their own; leads and workspace admins manage everything
 - Due-date reminders that follow due-date changes (to the assignee, or the project lead if unassigned)
 - Dashboard, project analytics and calendar views; light/dark theme
+- **Live updates:** task and comment changes appear for everyone viewing the project, without reloading
 - Background jobs: Clerk → database sync, task-assignment email, due-date reminder
 - Per-user rate limits, and a Redis cache for the dashboard with explicit invalidation
 
@@ -29,6 +30,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 | Database | PostgreSQL on [Neon](https://neon.tech), via Prisma 6 and the Neon serverless driver adapter |
 | Cache and rate limits | Redis 7 via [ioredis](https://github.com/redis/ioredis); optional (the API fails open without it) |
 | Auth | [Clerk](https://clerk.com): users, sessions, Organizations (workspaces) |
+| Real-time | [Socket.io](https://socket.io) (WebSocket) with authorized project rooms; Redis adapter for multiple instances |
 | Background jobs | [Inngest](https://www.inngest.com): event-driven functions with retries and sleeps |
 | Email | Nodemailer over SMTP ([Brevo](https://www.brevo.com)) |
 
@@ -40,6 +42,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 │  (Vite, Redux)           │  SDK   │              │  organizations
 └────────────┬─────────────┘        └──────┬───────┘
              │ REST + "Authorization: Bearer <Clerk session JWT>"
+             │ WebSocket (Socket.io): token in the handshake, project rooms
              ▼                               │ webhooks: user.* / organization.*
 ┌──────────────────────────┐                 ▼
 │  Express API (TypeScript)│        ┌──────────────┐
@@ -49,9 +52,10 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 │  routes → controllers →  │ events └──────────────┘
 │  services (authorization,│   (app/task.assigned)
 │  cache) → errorHandler   │        ┌──────────────┐
-│  /api/inngest: functions │◄──────►│    Redis     │  rate-limit counters,
-└────────────┬─────────────┘        │              │  cached dashboard reads
-             │ Prisma               └──────────────┘
+│  Socket.io: auth, rooms  │◄──────►│    Redis     │  rate-limit counters,
+│  /api/inngest: functions │        │              │  cached dashboard reads,
+└────────────┬─────────────┘        │              │  socket events between
+             │ Prisma               └──────────────┘  API instances
              ▼
 ┌──────────────────────────┐        ┌──────────────┐
 │  PostgreSQL (Neon)       │        │  SMTP relay  │◄── task-assignment and
@@ -64,9 +68,11 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 
 **Errors.** Services throw `AppError`s (400/403/404/…). Express 5 forwards them to a single `errorHandler`, which returns the status and message. Unexpected errors are logged with their stack and the request ID; the client only gets `500 {"message":"Internal server error","requestId":"…"}`.
 
-**Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.created`, `clerk/organization.created`, …), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces.
+**Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.*`, `clerk/organization.*`, `clerk/organizationMembership.*`), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces. Removing a member or changing their role takes effect immediately: their access, cached views and live subscriptions are revoked. When deploying, subscribe Clerk's webhook to the `user.*`, `organization.*`, `organizationMembership.*` and `organizationInvitation.accepted` events.
 
 **Redis.** Rate limiting (per user, before the routes) and the dashboard cache (inside the services, after the permission check) both use Redis. Postgres stays the source of truth: if Redis is missing or down, requests go straight to the database without limits, and the outage is logged once. See [Caching](#caching) and [Security](#security).
+
+**Real-time.** See [Real-time updates](#real-time-updates).
 
 **Background work.** Creating a task emits `app/task.assigned`. If the task has an assignee, an Inngest function emails them, sleeps until the due date, and sends a reminder if the task isn't done by then.
 
@@ -108,6 +114,23 @@ Each user gets **300 reads and 60 writes per minute**. Every response carries `R
 | POST | `/api/comments` | Add a comment to a task |
 | GET/POST/PUT | `/api/inngest` | Inngest function endpoint |
 
+### Real-time updates
+
+The client opens one Socket.io connection (WebSocket only) per session, sending its Clerk session token in the handshake. The server verifies it with Clerk and refuses unknown users.
+
+| Direction | Event | Payload |
+|---|---|---|
+| client → server | `project:join` | project ID; acknowledged with `{ ok: true }` or `{ ok: false, error }` |
+| client → server | `project:leave` | project ID |
+| server → client | `task:created`, `task:updated` | the task with its assignee (same as the REST response) |
+| server → client | `tasks:deleted` | `{ projectId, taskIds }`, one per project per bulk delete |
+| server → client | `comment:created` | the comment with its author |
+
+- **Authorized rooms:** joining runs the same `requireProjectAccess` check as the REST API. Events go only to the project's room, after the database write succeeds.
+- **Revocation is pushed:** when a member is removed or demoted, their sockets leave the rooms they lost; deleted users are disconnected; a deleted workspace's rooms are emptied. It's applied on the local instance without waiting for Redis, then relayed.
+- **Missed events:** delivery is at-most-once, so after a reconnect the client rejoins and refetches. Updates are applied by ID, so a user's own changes arriving back as events are harmless.
+- **Several API instances:** the Redis adapter relays broadcasts and room changes between them. WebSocket-only transport means no sticky sessions are needed. If Redis is down, events still reach clients on the same instance.
+
 ## Project structure
 
 ```
@@ -117,6 +140,7 @@ client/                 React app
   src/features/         Redux slices
   src/configs/api.js    Axios instance (base URL from VITE_BASEURL)
   src/utils/            shared helpers (e.g. project progress)
+  src/realtime/         socket provider and the useProjectRoom hook
 server/                 Express API (TypeScript)
   server.ts             app setup, middleware order, routes
   routes/               one router per resource
@@ -127,6 +151,7 @@ server/                 Express API (TypeScript)
     workspaceCache.ts   Redis cache with versioned keys
   middlewares/          auth guard, rate limiter, request logger, error handler
   inngest/              background functions: index.ts wires triggers, handlers.ts holds the logic
+  realtime/             Socket.io: handshake auth, project rooms, revocation, Redis adapter
   emails/               email templates (escaped)
   configs/              Prisma client, Redis client, logger, mailer, app URL
   tests/                integration tests, factories, test setup
@@ -315,7 +340,7 @@ npm run bench:explain -- <label> # EXPLAIN ANALYZE of each query → bench-resul
 
 ## Security
 
-An audit of the inherited codebase found the issues below. Each was reproduced with a failing integration test **before** the fix, and those tests now run on every change (136 tests in `server/tests/`).
+An audit of the inherited codebase found the issues below. Each was reproduced with a failing integration test **before** the fix, and those tests now run on every change (165 tests in `server/tests/`).
 
 ### Access control
 
@@ -327,6 +352,8 @@ An audit of the inherited codebase found the issues below. Each was reproduced w
 | Add-member searched all users by email | Users from other workspaces could be added; responses revealed which emails exist | Lookup limited to the workspace's members; one response for unknown and foreign emails; 409 for duplicates | `authorization.test.ts` |
 | Task update passed the request body to the ORM (mass assignment) | Clients could move tasks between projects, rewrite `createdAt`, assign non-members | Allow-listed fields per operation; field-level rules per role | `taskPermissions.test.ts` |
 | Team lead not validated on project creation | A user from another workspace could be made lead | Lead must be a workspace member | `validation.test.ts` |
+| Membership removals and role changes in Clerk weren't synced | Members removed from a workspace kept full access; demoted admins kept admin rights | Membership created/updated/deleted handled; removal hands over ownership and led projects, removes project memberships, unassigns tasks; live subscriptions revoked | `membershipSync.test.ts`, `realtime.test.ts` |
+| (New surface) Real-time connections | Sockets and rooms need the same guarantees as REST | Token verified at the handshake; room joins use the REST permission check; events only after successful writes | `realtime*.test.ts` |
 
 Permission rules live in one module (`server/services/authorization.ts`). Leads and workspace admins manage projects and tasks; members can create, claim and complete their own tasks.
 
@@ -364,7 +391,7 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 - [x] **Phase 2**: Security audit with test-first fixes (86 integration tests: Vitest + Supertest on disposable Postgres); Zod validation; centralized authorization with task permission rules; safe, replay-proof background jobs; CORS lock-down
 - [x] **Phase 3**: Screen-shaped endpoints replacing a 76 MB workspace payload; keyset pagination with server-side filters; seven indexes chosen from `EXPLAIN ANALYZE`; benchmarks on a 50k-task dataset (project task list: 7.2 s → 19 ms p97.5)
 - [x] **Phase 4**: Redis: per-user rate limiting (sliding-window counter in Lua); dashboard cache with versioned-key invalidation (summary 265 → 1,744 req/s); both fail open. Task editing
-- [ ] **Phase 5**: Real-time task and comment updates with Socket.io, in project-scoped authorized rooms
+- [x] **Phase 5**: Real-time task and comment updates with Socket.io: handshake auth, authorized project rooms, pushed revocation, resync after reconnect, Redis adapter for multiple instances. Fixed: Clerk membership removals weren't synced
 - [ ] **Phase 6**: Docker Compose (API + Postgres + Redis) and GitHub Actions CI
 
 A changelog of what changed in each phase, and why, is kept in [`CHANGELOG.md`](CHANGELOG.md).

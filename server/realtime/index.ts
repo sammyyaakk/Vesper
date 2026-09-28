@@ -8,6 +8,7 @@ import prisma from "../configs/prisma.js";
 import { uuid } from "../schemas/common.js";
 import { accessibleProjects, requireProjectAccess } from "../services/authorization.js";
 import { AppError } from "../utils/AppError.js";
+import { createRedisAdapter } from "./redisAdapter.js";
 
 type JoinResult = { ok: true } | { ok: false; error: string };
 
@@ -62,8 +63,12 @@ const joinProject = async (userId: string, projectId: unknown): Promise<JoinResu
     }
 };
 
-export const createRealtime = (httpServer: HttpServer) => {
-    const io: RealtimeServer = new Server(httpServer, { cors: { origin: [appUrl()] } });
+// With Redis, broadcasts and room changes reach sockets on every API instance; without it, only this one
+export const createRealtime = (httpServer: HttpServer, { redisUrl = process.env.REDIS_URL || null }: { redisUrl?: string | null } = {}) => {
+    const io: RealtimeServer = new Server(httpServer, {
+        cors: { origin: [appUrl()] },
+        ...(redisUrl ? { adapter: createRedisAdapter(redisUrl, httpServer) } : {}),
+    });
 
     io.use(async (socket, next) => {
         const userId = await authenticate(socket.handshake.auth?.token);
@@ -107,15 +112,21 @@ export const revokeLostProjectAccess = async (userId: string, workspaceId: strin
     ]);
     const allowedIds = new Set(allowed.map((project) => project.id));
     const lost = all.filter((project) => !allowedIds.has(project.id)).map((project) => projectRoom(project.id));
-    if (lost.length > 0) current.in(userRoom(userId)).socketsLeave(lost);
+    if (lost.length === 0) return;
+    for (const target of everywhere(current, userRoom(userId))) target.socketsLeave(lost);
 };
 
 export const disconnectUser = (userId: string) => {
-    current?.in(userRoom(userId)).disconnectSockets(true);
+    if (!current) return;
+    for (const target of everywhere(current, userRoom(userId))) target.disconnectSockets(true);
 };
 
 export const closeProjectRooms = (projectIds: string[]) => {
     if (!current || projectIds.length === 0) return;
     const rooms = projectIds.map(projectRoom);
-    current.in(rooms).socketsLeave(rooms);
+    for (const target of everywhere(current, rooms)) target.socketsLeave(rooms);
 };
+
+// With the Redis adapter, room changes are applied only when the instance receives its own message back through Redis.
+// Revocation mustn't wait for (or depend on) Redis, so apply it here first, then relay it to the other instances.
+const everywhere = (io: RealtimeServer, rooms: string | string[]) => [io.local.in(rooms), io.in(rooms)];
