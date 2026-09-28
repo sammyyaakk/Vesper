@@ -1,0 +1,204 @@
+{
+  "label": "final",
+  "date": "2026-09-28T06:54:39.250Z",
+  "node": "v24.18.0",
+  "benchUser": "org_bench_main_user_7",
+  "dataset": {
+    "tasks": 50000,
+    "comments": 100000,
+    "benchProjectTasks": 2307
+  },
+  "scenarios": [
+    {
+      "name": "GET /api/workspaces (list)",
+      "path": "/api/workspaces",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/workspaces/:id/projects",
+      "path": "/api/workspaces/org_bench_main/projects",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/workspaces/:id/summary",
+      "path": "/api/workspaces/org_bench_main/summary",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (page 1)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (after row 2,000)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&cursor=MjAyNS0xMS0yMVQxNjo0Nzo1My45NTFafGEwYTU5ZmU5LWVhNGYtNDU5Zi1hYTlkLWExMzMwYjY1Mjk0NQ",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks?assignee=me",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&assignee=me",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/tasks/:id/comments",
+      "path": "/api/tasks/5f398ab6-2bb6-43ca-bb00-e708d1e9b0d2/comments?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/stats",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/stats",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/calendar (1 month)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/calendar?from=2026-09-01&to=2026-09-30",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    }
+  ],
+  "results": [
+    {
+      "scenario": "GET /api/workspaces (list)",
+      "connections": 10,
+      "p50_ms": 2,
+      "p97_5_ms": 3,
+      "p99_ms": 4,
+      "mean_ms": 2,
+      "req_per_s": 4024.3,
+      "kb_per_response": 0.4,
+      "requests": 60356,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/projects",
+      "connections": 10,
+      "p50_ms": 23,
+      "p97_5_ms": 30,
+      "p99_ms": 32,
+      "mean_ms": 22.9,
+      "req_per_s": 428.3,
+      "kb_per_response": 59.7,
+      "requests": 6424,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/summary",
+      "connections": 10,
+      "p50_ms": 36,
+      "p97_5_ms": 49,
+      "p99_ms": 52,
+      "mean_ms": 36.5,
+      "req_per_s": 270,
+      "kb_per_response": 20.9,
+      "requests": 4050,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (page 1)",
+      "connections": 10,
+      "p50_ms": 14,
+      "p97_5_ms": 19,
+      "p99_ms": 21,
+      "mean_ms": 14.3,
+      "req_per_s": 677.9,
+      "kb_per_response": 37.2,
+      "requests": 10168,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (after row 2,000)",
+      "connections": 10,
+      "p50_ms": 14,
+      "p97_5_ms": 20,
+      "p99_ms": 22,
+      "mean_ms": 14.8,
+      "req_per_s": 655.2,
+      "kb_per_response": 36.8,
+      "requests": 9828,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks?assignee=me",
+      "connections": 10,
+      "p50_ms": 14,
+      "p97_5_ms": 20,
+      "p99_ms": 22,
+      "mean_ms": 14.6,
+      "req_per_s": 664.4,
+      "kb_per_response": 38.5,
+      "requests": 9966,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/tasks/:id/comments",
+      "connections": 10,
+      "p50_ms": 9,
+      "p97_5_ms": 12,
+      "p99_ms": 14,
+      "mean_ms": 9,
+      "req_per_s": 1057.3,
+      "kb_per_response": 1.3,
+      "requests": 15860,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/stats",
+      "connections": 10,
+      "p50_ms": 12,
+      "p97_5_ms": 17,
+      "p99_ms": 19,
+      "mean_ms": 12.5,
+      "req_per_s": 769.8,
+      "kb_per_response": 0.5,
+      "requests": 11547,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/calendar (1 month)",
+      "connections": 10,
+      "p50_ms": 40,
+      "p97_5_ms": 52,
+      "p99_ms": 55,
+      "mean_ms": 40.3,
+      "req_per_s": 245.7,
+      "kb_per_response": 125.8,
+      "requests": 3685,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    }
+  ]
+}

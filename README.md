@@ -79,19 +79,27 @@ User ─┬─< WorkspaceMember >─── Workspace ───< Project ──�
 
 ### API
 
-All routes except `/api/inngest` require a Clerk session.
+All routes except `/api/inngest` require a Clerk session. Lists are paginated with `?limit=` (1–100, default 50) and an opaque `?cursor=`; responses include `nextCursor` (null on the last page).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/workspaces` | Workspaces for the current user (with projects, tasks, members) |
+| GET | `/api/workspaces` | Your workspaces and your role in each |
+| GET | `/api/workspaces/:id` | A workspace with its members |
+| GET | `/api/workspaces/:id/projects` | Projects you can access, with task counts |
+| GET | `/api/workspaces/:id/summary` | Dashboard numbers and short task lists |
 | POST | `/api/projects` | Create a project (workspace admin) |
-| PUT | `/api/projects` | Update a project |
-| POST | `/api/projects/:projectId/addMember` | Add a workspace member to a project |
+| PUT | `/api/projects` | Update a project (lead or workspace admin) |
+| GET | `/api/projects/:id` | A project with members and task counts |
+| GET | `/api/projects/:id/tasks` | A page of tasks; filters `status`, `type`, `priority`, `assignee=me\|none\|<userId>` |
+| GET | `/api/projects/:id/stats` | Task counts by status, type, priority; overdue |
+| GET | `/api/projects/:id/calendar?from=&to=` | Tasks due in a window (≤ 62 days), upcoming, overdue |
+| POST | `/api/projects/:id/addMember` | Add a workspace member to a project |
 | POST | `/api/tasks` | Create a task |
-| PUT | `/api/tasks/:id` | Update a task |
+| GET | `/api/tasks/:id` | A task with its assignee and project |
+| PUT | `/api/tasks/:id` | Update a task (field rules per role) |
 | POST | `/api/tasks/delete` | Delete tasks by ID |
+| GET | `/api/tasks/:id/comments` | A page of comments, oldest first |
 | POST | `/api/comments` | Add a comment to a task |
-| GET | `/api/comments/:taskId` | List a task's comments |
 | GET/POST/PUT | `/api/inngest` | Inngest function endpoint |
 
 ## Project structure
@@ -116,11 +124,12 @@ server/                 Express API (TypeScript)
   configs/              Prisma client, logger, mailer, app URL
   tests/                integration tests, factories, test setup
   utils/AppError.ts     typed HTTP errors
-  scripts/              dev tooling (sync:clerk)
+  scripts/              dev tooling (sync:clerk) and benchmarks (scripts/bench)
+  bench-results/        benchmark results and query plans
   prisma/               schema and migrations
 ```
 
-Server scripts (from `server/`): `npm run dev` (watch mode), `npm test`, `npm run typecheck`, `npm run build` (compile to `dist/`), `npm start` (run the build), `npm run db:test`, `npm run sync:clerk`.
+Server scripts (from `server/`): `npm run dev` (watch mode), `npm test`, `npm run typecheck`, `npm run build` (compile to `dist/`), `npm start` (run the build), `npm run db:test`, `npm run sync:clerk`, and the `bench:*` scripts (see [Performance](#performance)).
 
 ---
 
@@ -224,6 +233,48 @@ The test run refuses to start unless `DATABASE_URL` points at a local database w
 
 ---
 
+## Performance
+
+Measured on a seeded dataset of **50,000 tasks and 100,000 comments** (4 workspaces; the benchmark project has 2,307 tasks), using a local Postgres 17 in Docker and autocannon against the real HTTP server on a laptop (Node 24, Windows). Numbers show relative improvement, not production latency.
+
+### Loading screens: before vs after
+
+Before, every screen loaded the whole workspace from one endpoint. After, each screen calls small, purpose-built endpoints.
+
+| Screen | Before | After |
+|---|---|---|
+| Dashboard | `GET /api/workspaces` full tree: **p50 6.8 s, p97.5 7.2 s, ~76 MB**, 0.1 req/s (1 connection; 10 connections timed out) | `summary` + `projects`: **p50 36 ms + 23 ms, ~81 KB** (10 connections) |
+| Project task list | same full tree (**~76 MB**) | one page of 50 tasks: **p50 14 ms, p97.5 19 ms, 37 KB**, 678 req/s |
+| Task list, page after row 2,000 | n/a (everything was loaded) | **p50 14 ms**: same as page 1 (keyset pagination) |
+| Task comments | p50 20 ms (full table scan) | p50 9 ms, 1,057 req/s |
+
+### Database query time (`EXPLAIN ANALYZE`, before → after indexes)
+
+| Query | Before | After | How |
+|---|---|---|---|
+| Tasks of a project, first page | 5.57 ms | 0.11 ms | index on `(projectId, createdAt, id)`, read backwards; no sort |
+| Page after row 2,000 | 5.78 ms | 0.12 ms | keyset condition that seeks straight to the cursor |
+| Comments of a task | 6.03 ms | 0.07 ms | index on `(taskId, createdAt, id)` |
+| Per-project task counts | 13.19 ms | 5.50 ms | index-only scan on `(projectId, status)` |
+| "My open tasks", top 10 | 5.70 ms | 0.07 ms | index on `(assigneeId, dueDate)` |
+| Recently updated, top 10 | 29.48 ms | 0.60 ms | index on `updatedAt`, read backwards |
+
+The overdue count is intentionally left as a sequential scan: it matches about a third of all tasks, where an index doesn't help.
+
+**What changed:** the workspace tree was split into screen-shaped endpoints; lists use keyset (cursor) pagination with filters on the server; dashboard numbers are aggregated in SQL; seven indexes were chosen from query plans; responses select only the columns a screen shows. Raw results and query plans are in [`server/bench-results/`](server/bench-results/).
+
+### Reproducing
+
+```bash
+cd server
+npm run bench:db                 # local Postgres for benchmarks (port 5434)
+npm run bench:seed               # deterministic 50k tasks / 100k comments (~15 s)
+npm run bench -- <label>         # load test → bench-results/<label>.json
+npm run bench:explain -- <label> # EXPLAIN ANALYZE of each query → bench-results/explain-<label>.md
+```
+
+---
+
 ## Security
 
 An audit of the inherited codebase found the issues below. Each was reproduced with a failing integration test **before** the fix, and those tests now run on every change (86 tests in `server/tests/`).
@@ -273,7 +324,7 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 - [x] **Phase 0**: Setup, rebrand, local environment, documentation
 - [x] **Phase 1**: Backend in TypeScript (strict); routes → controllers → services layering; central authorization module; typed errors and a central error handler; structured logging with request IDs; task UX fixes and derived project progress
 - [x] **Phase 2**: Security audit with test-first fixes (86 integration tests: Vitest + Supertest on disposable Postgres); Zod validation; centralized authorization with task permission rules; safe, replay-proof background jobs; CORS lock-down
-- [ ] **Phase 3**: Focused, cursor-paginated endpoints; indexes chosen from query patterns; latency benchmarks on a 50k-task dataset
+- [x] **Phase 3**: Screen-shaped endpoints replacing a 76 MB workspace payload; keyset pagination with server-side filters; seven indexes chosen from `EXPLAIN ANALYZE`; benchmarks on a 50k-task dataset (project task list: 7.2 s → 19 ms p97.5)
 - [ ] **Phase 4**: Redis caching with explicit invalidation; per-user rate limiting
 - [ ] **Phase 5**: Real-time task and comment updates with Socket.io, in project-scoped authorized rooms
 - [ ] **Phase 6**: Docker Compose (API + Postgres + Redis) and GitHub Actions CI

@@ -134,7 +134,19 @@ export const stats = async (userId: string, projectId: string) => {
 };
 
 const CALENDAR_LIMIT = 500;
-const calendarTaskFields = { include: { assignee: { select: { id: true, name: true, image: true } } } } as const;
+// Only what the calendar draws; descriptions are the bulk of a task row and aren't shown there
+const calendarTaskFields = {
+    select: {
+        id: true,
+        projectId: true,
+        title: true,
+        status: true,
+        type: true,
+        priority: true,
+        dueDate: true,
+        assignee: { select: { id: true, name: true, image: true } },
+    },
+} as const;
 
 export const calendar = async (userId: string, projectId: string, { from, to }: CalendarQuery) => {
     await requireProjectAccess(projectId, userId);

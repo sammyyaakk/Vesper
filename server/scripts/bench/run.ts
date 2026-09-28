@@ -35,6 +35,9 @@ const deepCursor = await prisma.task.findFirstOrThrow({
     select: { id: true, createdAt: true },
 });
 const { encodeCursor } = await import("../../utils/pagination.js");
+const today = new Date();
+const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().slice(0, 10);
+const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 const dataset = {
     tasks: await prisma.task.count(),
     comments: await prisma.comment.count(),
@@ -51,6 +54,8 @@ const scenarios: Scenario[] = [
     { name: "GET /api/projects/:id/tasks (after row 2,000)", path: `/api/projects/${project.id}/tasks?limit=50&cursor=${encodeCursor(deepCursor)}`, ...standard },
     { name: "GET /api/projects/:id/tasks?assignee=me", path: `/api/projects/${project.id}/tasks?limit=50&assignee=me`, ...standard },
     { name: "GET /api/tasks/:id/comments", path: `/api/tasks/${task.id}/comments?limit=50`, ...standard },
+    { name: "GET /api/projects/:id/stats", path: `/api/projects/${project.id}/stats`, ...standard },
+    { name: "GET /api/projects/:id/calendar (1 month)", path: `/api/projects/${project.id}/calendar?from=${monthStart}&to=${monthEnd}`, ...standard },
 ];
 
 const startServer = async () => {
