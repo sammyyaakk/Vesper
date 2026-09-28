@@ -1,0 +1,57 @@
+{
+  "label": "baseline",
+  "date": "2026-09-27T16:51:33.549Z",
+  "node": "v24.18.0",
+  "benchUser": "org_bench_main_user_7",
+  "dataset": {
+    "tasks": 50000,
+    "comments": 100000,
+    "benchProjectTasks": 2307
+  },
+  "scenarios": [
+    {
+      "name": "GET /api/workspaces (full tree)",
+      "path": "/api/workspaces",
+      "connections": 1,
+      "durationSeconds": 30,
+      "timeoutSeconds": 60
+    },
+    {
+      "name": "GET /api/comments/:taskId",
+      "path": "/api/comments/5f398ab6-2bb6-43ca-bb00-e708d1e9b0d2",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    }
+  ],
+  "results": [
+    {
+      "scenario": "GET /api/workspaces (full tree)",
+      "connections": 1,
+      "p50_ms": 6782,
+      "p97_5_ms": 7208,
+      "p99_ms": 7208,
+      "mean_ms": 6890.8,
+      "req_per_s": 0.1,
+      "kb_per_response": 75684,
+      "requests": 4,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/comments/:taskId",
+      "connections": 10,
+      "p50_ms": 20,
+      "p97_5_ms": 27,
+      "p99_ms": 29,
+      "mean_ms": 20.2,
+      "req_per_s": 482.3,
+      "kb_per_response": 1.2,
+      "requests": 7234,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    }
+  ]
+}

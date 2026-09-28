@@ -1,4 +1,4 @@
-import type { Task, WorkspaceRole } from "@prisma/client";
+import type { Prisma, Task, WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import type { UpdateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
@@ -37,6 +37,21 @@ export const requireWorkspaceRole = async (
     if (!hasWorkspaceRole(workspace, userId, role)) throw denied;
     return workspace;
 };
+
+export const requireWorkspaceMembership = async (workspaceId: string, userId: string) => {
+    const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
+    if (!workspace) throw AppError.notFound("Workspace not found");
+    const membership = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId, workspaceId } },
+        select: { role: true },
+    });
+    if (!membership) throw AppError.forbidden("You are not a member of this workspace");
+    return membership.role;
+};
+
+// Admins see every project in the workspace; members see the projects they lead or belong to
+export const accessibleProjects = (workspaceId: string, userId: string, role: WorkspaceRole): Prisma.ProjectWhereInput =>
+    role === "ADMIN" ? { workspaceId } : { workspaceId, OR: [{ teamLead: userId }, { members: { some: { userId } } }] };
 
 export const requireProject = async (projectId: string) => {
     const project = await findProject(projectId);

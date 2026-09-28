@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import { getProjectProgress } from "../utils/projectProgress";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, UsersIcon, FolderOpen } from "lucide-react";
@@ -21,13 +21,8 @@ const ProjectOverview = () => {
         HIGH: "border-green-300 text-green-700 dark:border-green-500 dark:text-green-400",
     };
 
-    const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace || null);
+    const { currentWorkspace, projects } = useSelector((state) => state.workspace);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [projects, setProjects] = useState([]);
-
-    useEffect(() => {
-        setProjects(currentWorkspace?.projects || []);
-    }, [currentWorkspace]);
 
     return currentWorkspace && (
         <div className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 rounded-lg overflow-hidden">
@@ -91,10 +86,10 @@ const ProjectOverview = () => {
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-zinc-500 dark:text-zinc-500">Progress</span>
-                                        <span className="text-zinc-600 dark:text-zinc-400">{getProjectProgress(project.tasks)}%</span>
+                                        <span className="text-zinc-600 dark:text-zinc-400">{getProjectProgress(project.taskCounts)}%</span>
                                     </div>
                                     <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded h-1.5">
-                                        <div className="h-1.5 bg-blue-500 rounded" style={{ width: `${getProjectProgress(project.tasks)}%` }} />
+                                        <div className="h-1.5 bg-blue-500 rounded" style={{ width: `${getProjectProgress(project.taskCounts)}%` }} />
                                     </div>
                                 </div>
                             </Link>

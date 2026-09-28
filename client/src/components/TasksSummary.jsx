@@ -1,47 +1,32 @@
-import React, { useEffect, useState } from "react";
 import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
-import { useUser } from "@clerk/clerk-react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 export default function TasksSummary() {
-
-    const { user } = useUser();
-    const { currentWorkspace } = useSelector((state) => state.workspace);
-
-    const [tasks, setTasks] = useState([]);
-
-    // Get all tasks for all projects in current workspace
-    useEffect(() => {
-        if (currentWorkspace) {
-            setTasks(currentWorkspace.projects.flatMap((project) => project.tasks));
-        }
-    }, [currentWorkspace]);
-
-    const myTasks = tasks.filter(i => i.assigneeId === user.id);
-    const overdueTasks = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'DONE');
-    const inProgressIssues = tasks.filter(i => i.status === 'IN_PROGRESS');
+    const summary = useSelector((state) => state.workspace.summary);
+    const navigate = useNavigate();
 
     const summaryCards = [
         {
             title: "My Tasks",
-            count: myTasks.length,
+            count: summary?.tasks.mine ?? 0,
             icon: User,
             color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
-            items: myTasks.slice(0, 3)
+            items: (summary?.myTasks ?? []).slice(0, 3)
         },
         {
             title: "Overdue",
-            count: overdueTasks.length,
+            count: summary?.tasks.overdue ?? 0,
             icon: AlertTriangle,
             color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400",
-            items: overdueTasks.slice(0, 3)
+            items: (summary?.overdueTasks ?? []).slice(0, 3)
         },
         {
             title: "In Progress",
-            count: inProgressIssues.length,
+            count: summary?.tasks.inProgress ?? 0,
             icon: Clock,
             color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400",
-            items: inProgressIssues.slice(0, 3)
+            items: (summary?.inProgressTasks ?? []).slice(0, 3)
         }
     ];
 
@@ -70,7 +55,7 @@ export default function TasksSummary() {
                         ) : (
                             <div className="space-y-3">
                                 {card.items.map((issue) => (
-                                    <div key={issue.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+                                    <div key={issue.id} onClick={() => navigate(`/taskDetails?projectId=${issue.projectId}&taskId=${issue.id}`)} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                         <h4 className="text-sm font-medium text-gray-800 dark:text-white truncate">
                                             {issue.title}
                                         </h4>

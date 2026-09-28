@@ -42,8 +42,8 @@ export const createTask = (projectId: string, overrides: Partial<Prisma.TaskUnch
         data: { projectId, title: `Task ${next()}`, dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), ...overrides },
     });
 
-export const createComment = (taskId: string, userId: string, content = "A comment") =>
-    prisma.comment.create({ data: { taskId, userId, content } });
+export const createComment = (taskId: string, userId: string, content = "A comment", overrides: Partial<Prisma.CommentUncheckedCreateInput> = {}) =>
+    prisma.comment.create({ data: { taskId, userId, content, ...overrides } });
 
 // A workspace with an admin, a project lead, a project member and an outsider (in the workspace, not the project)
 export const createTeam = async () => {

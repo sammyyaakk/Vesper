@@ -106,3 +106,11 @@ export const remove = async (userId: string, taskIds: string[]) => {
     await prisma.task.deleteMany({ where: { id: { in: ids } } });
     await publish(ids.map((taskId) => ({ name: "app/task.deleted", data: { taskId } })));
 };
+
+export const get = async (userId: string, taskId: string) => {
+    await requireTaskAccess(taskId, userId);
+    return prisma.task.findUniqueOrThrow({
+        where: { id: taskId },
+        include: { assignee: true, project: { select: { id: true, name: true, workspaceId: true, teamLead: true } } },
+    });
+};

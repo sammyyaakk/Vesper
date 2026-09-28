@@ -1,4 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
+import toast from "react-hot-toast";
+import api from "../configs/api";
+import { authHeaders } from "../features/workspaceSlice";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { CheckCircle, Clock, AlertTriangle, Users, ArrowRightIcon } from "lucide-react";
 
@@ -10,45 +14,40 @@ const PRIORITY_COLORS = {
     HIGH: "text-emerald-600 bg-emerald-200 dark:text-emerald-500 dark:bg-emerald-600",
 };
 
-const ProjectAnalytics = ({ project, tasks }) => {
-    const { stats, statusData, typeData, priorityData } = useMemo(() => {
-        const now = new Date();
-        const total = tasks.length;
+const EMPTY_STATS = { total: 0, todo: 0, inProgress: 0, done: 0, overdue: 0, byType: {}, byPriority: { LOW: 0, MEDIUM: 0, HIGH: 0 } };
 
-        const stats = {
-            total,
-            completed: 0,
-            inProgress: 0,
-            todo: 0,
-            overdue: 0,
+const ProjectAnalytics = ({ projectId, project, reloadKey }) => {
+    const { getToken } = useAuth();
+    const [counts, setCounts] = useState(EMPTY_STATS);
+
+    useEffect(() => {
+        let cancelled = false;
+        authHeaders(getToken)
+            .then((config) => api.get(`/api/projects/${projectId}/stats`, config))
+            .then(({ data }) => !cancelled && setCounts(data.stats))
+            .catch((error) => toast.error(error?.response?.data?.message || error.message));
+        return () => {
+            cancelled = true;
         };
+    }, [projectId, reloadKey, getToken]);
 
-        const statusMap = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
-        const typeMap = { TASK: 0, BUG: 0, FEATURE: 0, IMPROVEMENT: 0, OTHER: 0 };
-        const priorityMap = { LOW: 0, MEDIUM: 0, HIGH: 0 };
-
-        tasks.forEach((t) => {
-            if (t.status === "DONE") stats.completed++;
-            if (t.status === "IN_PROGRESS") stats.inProgress++;
-            if (t.status === "TODO") stats.todo++;
-            if (new Date(t.dueDate) < now && t.status !== "DONE") stats.overdue++;
-
-            if (statusMap[t.status] !== undefined) statusMap[t.status]++;
-            if (typeMap[t.type] !== undefined) typeMap[t.type]++;
-            if (priorityMap[t.priority] !== undefined) priorityMap[t.priority]++;
-        });
-
+    const { stats, statusData, typeData, priorityData } = useMemo(() => {
+        const { total } = counts;
         return {
-            stats,
-            statusData: Object.entries(statusMap).map(([k, v]) => ({ name: k.replace("_", " "), value: v })),
-            typeData: Object.entries(typeMap).filter(([_, v]) => v > 0).map(([k, v]) => ({ name: k, value: v })),
-            priorityData: Object.entries(priorityMap).map(([k, v]) => ({
+            stats: { total, completed: counts.done, inProgress: counts.inProgress, todo: counts.todo, overdue: counts.overdue },
+            statusData: [
+                { name: "TODO", value: counts.todo },
+                { name: "IN PROGRESS", value: counts.inProgress },
+                { name: "DONE", value: counts.done },
+            ],
+            typeData: Object.entries(counts.byType).filter(([, v]) => v > 0).map(([k, v]) => ({ name: k, value: v })),
+            priorityData: Object.entries(counts.byPriority).map(([k, v]) => ({
                 name: k,
                 value: v,
                 percentage: total > 0 ? Math.round((v / total) * 100) : 0,
             })),
         };
-    }, [tasks]);
+    }, [counts]);
 
     const completionRate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
 

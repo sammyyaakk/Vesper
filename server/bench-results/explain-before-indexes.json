@@ -1,0 +1,57 @@
+[
+  {
+    "operation": "tasks of a project, page 1",
+    "plan": "Seq Scan on Task",
+    "ms": 5.565
+  },
+  {
+    "operation": "tasks of a project, after row 2,000",
+    "plan": "Index Scan (\"Task_pkey\") on Task, Index Only Scan (\"Task_pkey\") on Task, Seq Scan on Task",
+    "ms": 5.781
+  },
+  {
+    "operation": "tasks of a project, assignee = me",
+    "plan": "Seq Scan on Task",
+    "ms": 5.226
+  },
+  {
+    "operation": "comments of a task, page 1",
+    "plan": "Seq Scan on Comment",
+    "ms": 6.033
+  },
+  {
+    "operation": "project members by project (access checks, includes)",
+    "plan": "Seq Scan on ProjectMember",
+    "ms": 0.049
+  },
+  {
+    "operation": "projects visible to a member",
+    "plan": "Seq Scan on Project, Bitmap Heap Scan on ProjectMember, Bitmap Index Scan on ProjectMember_userId_projectId_key",
+    "ms": 0.074
+  },
+  {
+    "operation": "task counts per project (GROUP BY)",
+    "plan": "Seq Scan on Task",
+    "ms": 13.193
+  },
+  {
+    "operation": "summary: overdue count",
+    "plan": "Seq Scan on Task",
+    "ms": 10.571
+  },
+  {
+    "operation": "summary: my open tasks (count)",
+    "plan": "Seq Scan on Task",
+    "ms": 5.329
+  },
+  {
+    "operation": "summary: my open tasks (top 10 by due date)",
+    "plan": "Seq Scan on Task",
+    "ms": 5.701
+  },
+  {
+    "operation": "summary: recently updated (top 10)",
+    "plan": "Seq Scan on Task",
+    "ms": 29.477
+  }
+]

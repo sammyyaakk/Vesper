@@ -16,7 +16,7 @@ describe("#1 GET /api/comments/:taskId (IDOR)", () => {
         const task = await createTask(project.id);
         await createComment(task.id, lead.id, "Internal note");
 
-        const res = await as(member.id).get(`/api/comments/${task.id}`);
+        const res = await as(member.id).get(`/api/tasks/${task.id}/comments`);
 
         expect(res.status).toBe(200);
         expect(res.body.comments).toHaveLength(1);
@@ -28,7 +28,7 @@ describe("#1 GET /api/comments/:taskId (IDOR)", () => {
         await createComment(task.id, lead.id, "Confidential");
         const attacker = await createOtherTenant();
 
-        const res = await as(attacker.owner.id).get(`/api/comments/${task.id}`);
+        const res = await as(attacker.owner.id).get(`/api/tasks/${task.id}/comments`);
 
         expect(res.status).toBe(403);
         expect(JSON.stringify(res.body)).not.toContain("Confidential");
@@ -38,14 +38,14 @@ describe("#1 GET /api/comments/:taskId (IDOR)", () => {
         const { outsider, project } = await createTeam();
         const task = await createTask(project.id);
 
-        const res = await as(outsider.id).get(`/api/comments/${task.id}`);
+        const res = await as(outsider.id).get(`/api/tasks/${task.id}/comments`);
 
         expect(res.status).toBe(403);
     });
 
     it("returns 404 for a task that doesn't exist", async () => {
         const { member } = await createTeam();
-        const res = await as(member.id).get("/api/comments/00000000-0000-4000-8000-000000000000");
+        const res = await as(member.id).get("/api/tasks/00000000-0000-4000-8000-000000000000/comments");
         expect(res.status).toBe(404);
     });
 });

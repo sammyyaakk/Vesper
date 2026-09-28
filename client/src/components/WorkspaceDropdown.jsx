@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import { setCurrentWorkspace } from "../features/workspaceSlice";
+import { loadWorkspace } from "../features/workspaceSlice";
 import { useNavigate } from "react-router-dom";
-import { useClerk, useOrganizationList } from "@clerk/clerk-react";
+import { useAuth, useClerk, useOrganizationList } from "@clerk/clerk-react";
 
 function WorkspaceDropdown() {
 
     const { setActive, userMemberships, isLoaded } = useOrganizationList({ userMemberships: true });
 
     const { openCreateOrganization } = useClerk()
+    const { getToken } = useAuth();
 
     const { workspaces } = useSelector((state) => state.workspace);
     const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
@@ -21,7 +22,7 @@ function WorkspaceDropdown() {
 
     const onSelectWorkspace = (organizationId) => {
         setActive({organization:organizationId});
-        dispatch(setCurrentWorkspace(organizationId))
+        dispatch(loadWorkspace({ getToken, workspaceId: organizationId }))
         setIsOpen(false);
         navigate('/')
     }

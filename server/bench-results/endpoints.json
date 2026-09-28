@@ -1,0 +1,183 @@
+{
+  "label": "endpoints",
+  "date": "2026-09-27T17:01:11.569Z",
+  "node": "v24.18.0",
+  "benchUser": "org_bench_main_user_7",
+  "dataset": {
+    "tasks": 50000,
+    "comments": 100000,
+    "benchProjectTasks": 2307
+  },
+  "scenarios": [
+    {
+      "name": "GET /api/workspaces (full tree)",
+      "path": "/api/workspaces",
+      "connections": 1,
+      "durationSeconds": 30,
+      "timeoutSeconds": 60
+    },
+    {
+      "name": "GET /api/comments/:taskId",
+      "path": "/api/comments/5f398ab6-2bb6-43ca-bb00-e708d1e9b0d2",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/workspaces/:id/projects",
+      "path": "/api/workspaces/org_bench_main/projects",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/workspaces/:id/summary",
+      "path": "/api/workspaces/org_bench_main/summary",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (page 1)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (after row 2,000)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&cursor=a0a59fe9-ea4f-459f-aa9d-a1330b652945",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/projects/:id/tasks?assignee=me",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&assignee=me",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    },
+    {
+      "name": "GET /api/tasks/:id/comments",
+      "path": "/api/tasks/5f398ab6-2bb6-43ca-bb00-e708d1e9b0d2/comments?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10
+    }
+  ],
+  "results": [
+    {
+      "scenario": "GET /api/workspaces (full tree)",
+      "connections": 1,
+      "p50_ms": 4660,
+      "p97_5_ms": 4703,
+      "p99_ms": 4703,
+      "mean_ms": 4666.7,
+      "req_per_s": 0.2,
+      "kb_per_response": 75684,
+      "requests": 6,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/comments/:taskId",
+      "connections": 10,
+      "p50_ms": 18,
+      "p97_5_ms": 23,
+      "p99_ms": 24,
+      "mean_ms": 18.5,
+      "req_per_s": 525.6,
+      "kb_per_response": 1.2,
+      "requests": 7884,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/projects",
+      "connections": 10,
+      "p50_ms": 45,
+      "p97_5_ms": 55,
+      "p99_ms": 58,
+      "mean_ms": 45.1,
+      "req_per_s": 219.5,
+      "kb_per_response": 59.7,
+      "requests": 3293,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/summary",
+      "connections": 10,
+      "p50_ms": 107,
+      "p97_5_ms": 149,
+      "p99_ms": 163,
+      "mean_ms": 109.1,
+      "req_per_s": 91.5,
+      "kb_per_response": 20.9,
+      "requests": 1372,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (page 1)",
+      "connections": 10,
+      "p50_ms": 21,
+      "p97_5_ms": 27,
+      "p99_ms": 29,
+      "mean_ms": 21.4,
+      "req_per_s": 458.1,
+      "kb_per_response": 37.2,
+      "requests": 6872,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (after row 2,000)",
+      "connections": 10,
+      "p50_ms": 22,
+      "p97_5_ms": 28,
+      "p99_ms": 31,
+      "mean_ms": 22.3,
+      "req_per_s": 439,
+      "kb_per_response": 36.7,
+      "requests": 6585,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks?assignee=me",
+      "connections": 10,
+      "p50_ms": 22,
+      "p97_5_ms": 30,
+      "p99_ms": 34,
+      "mean_ms": 22.2,
+      "req_per_s": 441.4,
+      "kb_per_response": 38.4,
+      "requests": 6621,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/tasks/:id/comments",
+      "connections": 10,
+      "p50_ms": 19,
+      "p97_5_ms": 23,
+      "p99_ms": 24,
+      "mean_ms": 18.7,
+      "req_per_s": 520.6,
+      "kb_per_response": 1.2,
+      "requests": 7809,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    }
+  ]
+}

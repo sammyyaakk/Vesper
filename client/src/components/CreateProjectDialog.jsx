@@ -2,7 +2,7 @@ import { useState } from "react";
 import { XIcon } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import { useDispatch, useSelector } from "react-redux";
-import { addProject } from "../features/workspaceSlice";
+import { refreshWorkspace } from "../features/workspaceSlice";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 
@@ -32,8 +32,8 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                 return toast.error("Please select a team lead");
             }
             setIsSubmitting(true);
-            const { data } = await api.post("/api/projects", { workspaceId: currentWorkspace.id, ...formData }, { headers: { Authorization: `Bearer ${await getToken()}` } });
-            dispatch(addProject(data.project));
+            await api.post("/api/projects", { workspaceId: currentWorkspace.id, ...formData }, { headers: { Authorization: `Bearer ${await getToken()}` } });
+            dispatch(refreshWorkspace({ getToken }));
             setIsDialogOpen(false);
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message);
