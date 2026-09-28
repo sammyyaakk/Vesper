@@ -14,6 +14,9 @@ process.env.DIRECT_URL = BENCH_DATABASE_URL;
 process.env.NODE_ENV = "production";
 process.env.LOG_LEVEL = "warn";
 process.env.APP_URL ??= "http://localhost:5173";
+// Benchmarks measure the endpoints, not the limiter: raise the limits for the single benchmark user
+process.env.RATE_LIMIT_READS_PER_MINUTE ??= "10000000";
+process.env.RATE_LIMIT_WRITES_PER_MINUTE ??= "10000000";
 assertBenchDatabase(process.env.DATABASE_URL);
 
 const { app } = await import("../../app.js");
