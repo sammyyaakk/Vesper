@@ -1,6 +1,7 @@
 import { logger } from "../configs/logger.js";
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
+import { emitToProject } from "../realtime/index.js";
 import type { CreateTaskInput, UpdateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
 import {
@@ -61,10 +62,11 @@ export const create = async (userId: string, input: CreateTaskInput) => {
 
     await invalidateWorkspace(project.workspaceId);
 
-    const taskWithAssignee = await prisma.task.findUnique({
+    const taskWithAssignee = await prisma.task.findUniqueOrThrow({
         where: { id: task.id },
         include: { assignee: true },
     });
+    emitToProject(projectId, "task:created", taskWithAssignee);
 
     const events: TaskEvent[] = [dueDateSet(task.id, task.dueDate)];
     if (task.assigneeId && task.assigneeId !== userId) {
@@ -87,6 +89,7 @@ export const update = async (userId: string, taskId: string, changes: UpdateTask
         include: { assignee: true },
     });
     await invalidateWorkspace(project.workspaceId);
+    emitToProject(task.projectId, "task:updated", updated);
 
     const events: TaskEvent[] = [];
     if (dueDate && dueDate.getTime() !== task.dueDate.getTime()) events.push(dueDateSet(taskId, dueDate));
@@ -100,7 +103,7 @@ export const update = async (userId: string, taskId: string, changes: UpdateTask
 
 export const remove = async (userId: string, taskIds: string[]) => {
     const ids = [...new Set(taskIds)];
-    const tasks = await prisma.task.findMany({ where: { id: { in: ids } }, select: { projectId: true } });
+    const tasks = await prisma.task.findMany({ where: { id: { in: ids } }, select: { id: true, projectId: true } });
     if (tasks.length !== ids.length) throw AppError.notFound("Task not found");
 
     const workspaceIds: string[] = [];
@@ -110,6 +113,9 @@ export const remove = async (userId: string, taskIds: string[]) => {
 
     await prisma.task.deleteMany({ where: { id: { in: ids } } });
     await invalidateWorkspace(...workspaceIds);
+    for (const projectId of new Set(tasks.map((task) => task.projectId))) {
+        emitToProject(projectId, "tasks:deleted", { projectId, taskIds: tasks.filter((task) => task.projectId === projectId).map((task) => task.id) });
+    }
     await publish(ids.map((taskId) => ({ name: "app/task.deleted", data: { taskId } })));
 };
 

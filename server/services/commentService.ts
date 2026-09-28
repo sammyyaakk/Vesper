@@ -1,12 +1,15 @@
 import prisma from "../configs/prisma.js";
 import type { AddCommentInput } from "../schemas/comment.js";
 import type { PageQuery } from "../schemas/query.js";
+import { emitToProject } from "../realtime/index.js";
 import { after, orderBy, toPage } from "../utils/pagination.js";
 import { requireTaskAccess } from "./authorization.js";
 
 export const add = async (userId: string, { taskId, content }: AddCommentInput) => {
-    await requireTaskAccess(taskId, userId);
-    return prisma.comment.create({ data: { taskId, content, userId }, include: { user: true } });
+    const { task } = await requireTaskAccess(taskId, userId);
+    const comment = await prisma.comment.create({ data: { taskId, content, userId }, include: { user: true } });
+    emitToProject(task.projectId, "comment:created", comment);
+    return comment;
 };
 
 export const listPage = async (userId: string, taskId: string, query: PageQuery) => {

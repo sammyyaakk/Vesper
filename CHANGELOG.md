@@ -2,6 +2,27 @@
 
 Each phase lists what changed and why.
 
+## Phase 5: Real-time updates
+
+### Connections
+- Socket.io on the same HTTP server and port as the REST API.
+- The Clerk session token is sent in the handshake (not a cookie or the URL) and verified with Clerk, including the authorized origin; the user must exist in the database.
+- The client fetches a fresh token on every connect and reconnect, and uses WebSocket only.
+
+### Rooms and events
+- One room per project. `project:join` runs the same permission check as the REST API and is acknowledged; `project:leave` leaves.
+- The services emit `task:created`, `task:updated`, `tasks:deleted` and `comment:created` to the project's room after the database write succeeds, with the same payloads as the REST responses.
+- Client: the task list, task page and comments update live; the 10-second comment polling is removed. After a reconnect, the client rejoins and refetches what it missed. Updates are applied by ID, so duplicates are harmless.
+
+### Revocation and membership sync
+- Fixed (security): removing a member or changing their role in Clerk wasn't synced, so removed members kept full access and demoted admins kept admin rights. The app now handles `organizationMembership.created`, `.updated` and `.deleted`. A removal hands over ownership and led projects, removes the user's project memberships and unassigns their tasks in that workspace, in one transaction.
+- Live subscriptions follow: sockets leave the rooms their user lost access to; deleted users are disconnected; a deleted workspace's rooms are emptied. Workspace deletion is now safe to replay.
+
+### Multiple instances
+- Redis adapter (`@socket.io/redis-adapter`): broadcasts and room changes reach sockets on every API instance. Without `REDIS_URL`, the in-memory adapter is used.
+- The adapter doesn't handle Redis failures itself: its unawaited commands could crash the process with an unhandled rejection, so they're caught. During an outage, events still reach clients on the same instance.
+- The adapter applies room changes only when its own message returns through Redis, so revocation is applied locally first and then relayed; it doesn't depend on Redis.
+
 ## Phase 4: Redis (rate limiting and caching)
 
 ### Redis

@@ -5,6 +5,10 @@ import { assertTestDatabase, assertTestRedis } from "./testDatabase.js";
 vi.mock("@clerk/express", () => ({
     clerkMiddleware: () => (_req: Request, _res: Response, next: NextFunction) => next(),
     getAuth: (req: Request) => ({ userId: req.header("x-test-user-id") ?? null }),
+    verifyToken: async (token: string) => {
+        if (!token.startsWith("test:")) throw new Error("Invalid token");
+        return { sub: token.slice("test:".length) };
+    },
 }));
 
 // Tests must never send real email

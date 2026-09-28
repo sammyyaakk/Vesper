@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProjectProgress } from "../utils/projectProgress";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import api from "../configs/api";
@@ -10,6 +10,7 @@ import { CalendarIcon, FileIcon, MessageCircle, PenIcon, Pencil, UserCircle2 } f
 import { authHeaders, refreshWorkspace } from "../features/workspaceSlice";
 import TaskFormDialog from "../components/TaskFormDialog";
 import { canManageProject } from "../utils/permissions";
+import { useProjectRoom } from "../realtime/useProjectRoom";
 
 const TaskDetails = () => {
     const [searchParams] = useSearchParams();
@@ -73,19 +74,30 @@ const TaskDetails = () => {
         };
     }, [projectId, taskId, getToken, fetchCommentPage]);
 
-    // Poll only for comments newer than the last one shown (replaced by live updates in Phase 5)
-    useEffect(() => {
-        if (!task || nextCursor) return;
-        const interval = setInterval(async () => {
+    const navigate = useNavigate();
+
+    useProjectRoom(projectId, {
+        onTaskUpdated: (updated) => updated.id === taskId && setTask((prev) => (prev ? { ...prev, ...updated } : prev)),
+        onTasksDeleted: ({ taskIds }) => {
+            if (!taskIds.includes(taskId)) return;
+            toast("This task was deleted.");
+            navigate(`/projectsDetail?id=${projectId}&tab=tasks`);
+        },
+        onCommentCreated: (comment) => comment.taskId === taskId && appendComments([comment]),
+        // Catch up on what arrived while disconnected: comments after the last one seen, and the task itself
+        onResync: async () => {
             try {
-                const { comments: newer } = await fetchCommentPage(endCursor.current);
-                if (newer.length) appendComments(newer);
+                const [{ comments: newer }, taskRes] = await Promise.all([
+                    fetchCommentPage(endCursor.current),
+                    api.get(`/api/tasks/${taskId}`, await authHeaders(getToken)),
+                ]);
+                appendComments(newer);
+                setTask(taskRes.data.task);
             } catch {
-                // a failed poll is retried on the next tick
+                // the next reconnect tries again
             }
-        }, 10000);
-        return () => clearInterval(interval);
-    }, [task, nextCursor, fetchCommentPage]);
+        },
+    });
 
     const loadMoreComments = async () => {
         try {
