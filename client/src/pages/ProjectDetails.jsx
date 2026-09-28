@@ -7,7 +7,7 @@ import api from "../configs/api";
 import { authHeaders, refreshWorkspace } from "../features/workspaceSlice";
 import ProjectAnalytics from "../components/ProjectAnalytics";
 import ProjectSettings from "../components/ProjectSettings";
-import CreateTaskDialog from "../components/CreateTaskDialog";
+import TaskFormDialog from "../components/TaskFormDialog";
 import ProjectCalendar from "../components/ProjectCalendar";
 import ProjectTasks from "../components/ProjectTasks";
 
@@ -178,7 +178,7 @@ export default function ProjectDetail() {
             </div>
 
             {/* Create Task Modal */}
-            {showCreateTask && <CreateTaskDialog showCreateTask={showCreateTask} setShowCreateTask={setShowCreateTask} project={project} onCreated={handleTaskCreated} />}
+            {showCreateTask && <TaskFormDialog project={project} onClose={() => setShowCreateTask(false)} onSaved={handleTaskCreated} />}
         </div>
     );
 }

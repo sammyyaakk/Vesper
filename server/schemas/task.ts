@@ -1,6 +1,6 @@
 import { Priority, TaskStatus, TaskType } from "@prisma/client";
 import { z } from "zod";
-import { clerkId, optionalText, requiredDate, uuid } from "./common.js";
+import { clearableText, clerkId, optionalText, requiredDate, uuid } from "./common.js";
 
 const editableTaskFields = {
     title: z.string().trim().min(1, "Title is required").max(200),
@@ -15,7 +15,7 @@ const editableTaskFields = {
 export const createTaskSchema = z.object({ projectId: uuid, ...editableTaskFields });
 
 // Only these fields can change; anything else in the body (projectId, createdAt, …) is dropped
-export const updateTaskSchema = z.object(editableTaskFields).partial();
+export const updateTaskSchema = z.object({ ...editableTaskFields, description: clearableText }).partial();
 
 export const taskParamsSchema = z.object({ id: uuid });
 

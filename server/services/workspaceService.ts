@@ -1,6 +1,8 @@
+import type { WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import { accessibleProjects, requireWorkspaceMembership } from "./authorization.js";
 import { taskCountsByProject } from "./taskCounts.js";
+import { cached } from "./workspaceCache.js";
 
 export const listForUser = async (userId: string) => {
     const memberships = await prisma.workspaceMember.findMany({
@@ -22,6 +24,10 @@ export const get = async (userId: string, workspaceId: string) => {
 
 export const listProjects = async (userId: string, workspaceId: string) => {
     const role = await requireWorkspaceMembership(workspaceId, userId);
+    return cached(workspaceId, `projects:${userId}:${role}`, () => loadProjects(userId, workspaceId, role));
+};
+
+const loadProjects = async (userId: string, workspaceId: string, role: WorkspaceRole) => {
     const projects = await prisma.project.findMany({
         where: accessibleProjects(workspaceId, userId, role),
         include: { members: { include: { user: true } }, owner: true },
@@ -40,6 +46,10 @@ const summaryTaskFields = {
 
 export const summary = async (userId: string, workspaceId: string) => {
     const role = await requireWorkspaceMembership(workspaceId, userId);
+    return cached(workspaceId, `summary:${userId}:${role}`, () => loadSummary(userId, workspaceId, role));
+};
+
+const loadSummary = async (userId: string, workspaceId: string, role: WorkspaceRole) => {
     const projects = await prisma.project.findMany({
         where: accessibleProjects(workspaceId, userId, role),
         select: { id: true, status: true },

@@ -1,0 +1,291 @@
+{
+  "label": "phase-4",
+  "date": "2026-09-28T09:04:30.274Z",
+  "node": "v24.18.0",
+  "benchUser": "org_bench_main_user_7",
+  "dataset": {
+    "tasks": 50000,
+    "comments": 100000,
+    "benchProjectTasks": 2307
+  },
+  "scenarios": [
+    {
+      "name": "GET /api/workspaces (list)",
+      "path": "/api/workspaces",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/workspaces (list, Redis off)",
+      "path": "/api/workspaces",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": false
+    },
+    {
+      "name": "GET /api/workspaces/:id/projects (cached)",
+      "path": "/api/workspaces/org_bench_main/projects",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/workspaces/:id/projects (Redis off)",
+      "path": "/api/workspaces/org_bench_main/projects",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": false
+    },
+    {
+      "name": "GET /api/workspaces/:id/summary (cached)",
+      "path": "/api/workspaces/org_bench_main/summary",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/workspaces/:id/summary (Redis off)",
+      "path": "/api/workspaces/org_bench_main/summary",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": false
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (page 1)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/projects/:id/tasks (after row 2,000)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&cursor=MjAyNS0xMS0yMVQxNjo0Nzo1My45NTFafGEwYTU5ZmU5LWVhNGYtNDU5Zi1hYTlkLWExMzMwYjY1Mjk0NQ",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/projects/:id/tasks?assignee=me",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/tasks?limit=50&assignee=me",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/tasks/:id/comments",
+      "path": "/api/tasks/5f398ab6-2bb6-43ca-bb00-e708d1e9b0d2/comments?limit=50",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/projects/:id/stats",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/stats",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    },
+    {
+      "name": "GET /api/projects/:id/calendar (1 month)",
+      "path": "/api/projects/f2d15f3c-2c57-40cf-bf7d-0d8531fb9eed/calendar?from=2026-09-01&to=2026-09-30",
+      "connections": 10,
+      "durationSeconds": 15,
+      "timeoutSeconds": 10,
+      "redis": true
+    }
+  ],
+  "results": [
+    {
+      "scenario": "GET /api/workspaces (list)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 3,
+      "p97_5_ms": 4,
+      "p99_ms": 5,
+      "mean_ms": 2.8,
+      "req_per_s": 3047.9,
+      "kb_per_response": 0.5,
+      "requests": 45714,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces (list, Redis off)",
+      "redis": false,
+      "connections": 10,
+      "p50_ms": 2,
+      "p97_5_ms": 3,
+      "p99_ms": 4,
+      "mean_ms": 2.1,
+      "req_per_s": 3939.7,
+      "kb_per_response": 0.4,
+      "requests": 59087,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/projects (cached)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 7,
+      "p97_5_ms": 12,
+      "p99_ms": 14,
+      "mean_ms": 7.6,
+      "req_per_s": 1232.7,
+      "kb_per_response": 59.8,
+      "requests": 18490,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/projects (Redis off)",
+      "redis": false,
+      "connections": 10,
+      "p50_ms": 22,
+      "p97_5_ms": 30,
+      "p99_ms": 33,
+      "mean_ms": 22.8,
+      "req_per_s": 429.5,
+      "kb_per_response": 59.7,
+      "requests": 6442,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/summary (cached)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 5,
+      "p97_5_ms": 8,
+      "p99_ms": 10,
+      "mean_ms": 5.2,
+      "req_per_s": 1743.9,
+      "kb_per_response": 20.9,
+      "requests": 26158,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/workspaces/:id/summary (Redis off)",
+      "redis": false,
+      "connections": 10,
+      "p50_ms": 37,
+      "p97_5_ms": 52,
+      "p99_ms": 55,
+      "mean_ms": 37.3,
+      "req_per_s": 264.7,
+      "kb_per_response": 20.9,
+      "requests": 3970,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (page 1)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 15,
+      "p97_5_ms": 21,
+      "p99_ms": 23,
+      "mean_ms": 15.2,
+      "req_per_s": 636.3,
+      "kb_per_response": 37.3,
+      "requests": 9544,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks (after row 2,000)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 16,
+      "p97_5_ms": 23,
+      "p99_ms": 25,
+      "mean_ms": 16.4,
+      "req_per_s": 593.1,
+      "kb_per_response": 36.8,
+      "requests": 8897,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/tasks?assignee=me",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 15,
+      "p97_5_ms": 22,
+      "p99_ms": 24,
+      "mean_ms": 15.8,
+      "req_per_s": 615.1,
+      "kb_per_response": 38.5,
+      "requests": 9227,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/tasks/:id/comments",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 9,
+      "p97_5_ms": 13,
+      "p99_ms": 14,
+      "mean_ms": 9.3,
+      "req_per_s": 1025.3,
+      "kb_per_response": 1.4,
+      "requests": 15380,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/stats",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 13,
+      "p97_5_ms": 19,
+      "p99_ms": 21,
+      "mean_ms": 13.3,
+      "req_per_s": 724.1,
+      "kb_per_response": 0.6,
+      "requests": 10862,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "scenario": "GET /api/projects/:id/calendar (1 month)",
+      "redis": true,
+      "connections": 10,
+      "p50_ms": 41,
+      "p97_5_ms": 56,
+      "p99_ms": 60,
+      "mean_ms": 41.5,
+      "req_per_s": 238.5,
+      "kb_per_response": 125.9,
+      "requests": 3577,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    }
+  ]
+}

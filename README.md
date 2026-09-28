@@ -10,11 +10,12 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 
 - Sign-in with email or Google; workspaces are Clerk Organizations with **Admin** / **Member** roles
 - Projects with status, priority, dates, a team lead and project members; progress calculated from completed tasks
-- Tasks with type, priority, status, optional assignee and a required due date; comments on tasks
+- Tasks with type, priority, status, optional assignee and a required due date; editable after creation; comments on tasks
 - Members can claim unassigned tasks and complete their own; leads and workspace admins manage everything
 - Due-date reminders that follow due-date changes (to the assignee, or the project lead if unassigned)
 - Dashboard, project analytics and calendar views; light/dark theme
 - Background jobs: Clerk → database sync, task-assignment email, due-date reminder
+- Per-user rate limits, and a Redis cache for the dashboard with explicit invalidation
 
 ## Tech stack
 
@@ -26,6 +27,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 | Validation | [Zod](https://zod.dev) schemas for every request body and URL parameter |
 | Testing | Vitest + Supertest integration tests against a disposable Postgres in Docker |
 | Database | PostgreSQL on [Neon](https://neon.tech), via Prisma 6 and the Neon serverless driver adapter |
+| Cache and rate limits | Redis 7 via [ioredis](https://github.com/redis/ioredis); optional (the API fails open without it) |
 | Auth | [Clerk](https://clerk.com): users, sessions, Organizations (workspaces) |
 | Background jobs | [Inngest](https://www.inngest.com): event-driven functions with retries and sleeps |
 | Email | Nodemailer over SMTP ([Brevo](https://www.brevo.com)) |
@@ -43,13 +45,13 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 │  Express API (TypeScript)│        ┌──────────────┐
 │  requestLogger →         │◄───────│   Inngest    │  runs functions by calling
 │  clerkMiddleware →       │  HTTP  │              │  POST /api/inngest
-│  protect → routes →      │───────►│              │
-│  controllers → services  │ events └──────────────┘
-│  (authorization) →       │   (app/task.assigned)
-│  errorHandler            │
-│  /api/inngest: functions │
-└────────────┬─────────────┘
-             │ Prisma
+│  protect → rateLimit →   │───────►│              │
+│  routes → controllers →  │ events └──────────────┘
+│  services (authorization,│   (app/task.assigned)
+│  cache) → errorHandler   │        ┌──────────────┐
+│  /api/inngest: functions │◄──────►│    Redis     │  rate-limit counters,
+└────────────┬─────────────┘        │              │  cached dashboard reads
+             │ Prisma               └──────────────┘
              ▼
 ┌──────────────────────────┐        ┌──────────────┐
 │  PostgreSQL (Neon)       │        │  SMTP relay  │◄── task-assignment and
@@ -63,6 +65,8 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 **Errors.** Services throw `AppError`s (400/403/404/…). Express 5 forwards them to a single `errorHandler`, which returns the status and message. Unexpected errors are logged with their stack and the request ID; the client only gets `500 {"message":"Internal server error","requestId":"…"}`.
 
 **Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.created`, `clerk/organization.created`, …), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces.
+
+**Redis.** Rate limiting (per user, before the routes) and the dashboard cache (inside the services, after the permission check) both use Redis. Postgres stays the source of truth: if Redis is missing or down, requests go straight to the database without limits, and the outage is logged once. See [Caching](#caching) and [Security](#security).
 
 **Background work.** Creating a task emits `app/task.assigned`. If the task has an assignee, an Inngest function emails them, sleeps until the due date, and sends a reminder if the task isn't done by then.
 
@@ -80,6 +84,8 @@ User ─┬─< WorkspaceMember >─── Workspace ───< Project ──�
 ### API
 
 All routes except `/api/inngest` require a Clerk session. Lists are paginated with `?limit=` (1–100, default 50) and an opaque `?cursor=`; responses include `nextCursor` (null on the last page).
+
+Each user gets **300 reads and 60 writes per minute**. Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`; over the limit, the API answers `429` with `Retry-After`.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -118,10 +124,11 @@ server/                 Express API (TypeScript)
   schemas/              Zod request schemas (the source of input types)
   services/             business logic and data access
     authorization.ts    all permission checks
-  middlewares/          auth guard, request logger, error handler
+    workspaceCache.ts   Redis cache with versioned keys
+  middlewares/          auth guard, rate limiter, request logger, error handler
   inngest/              background functions: index.ts wires triggers, handlers.ts holds the logic
   emails/               email templates (escaped)
-  configs/              Prisma client, logger, mailer, app URL
+  configs/              Prisma client, Redis client, logger, mailer, app URL
   tests/                integration tests, factories, test setup
   utils/AppError.ts     typed HTTP errors
   scripts/              dev tooling (sync:clerk) and benchmarks (scripts/bench)
@@ -129,7 +136,7 @@ server/                 Express API (TypeScript)
   prisma/               schema and migrations
 ```
 
-Server scripts (from `server/`): `npm run dev` (watch mode), `npm test`, `npm run typecheck`, `npm run build` (compile to `dist/`), `npm start` (run the build), `npm run db:test`, `npm run sync:clerk`, and the `bench:*` scripts (see [Performance](#performance)).
+Server scripts (from `server/`): `npm run dev` (watch mode), `npm test`, `npm run typecheck`, `npm run build` (compile to `dist/`), `npm start` (run the build), `npm run db:test`, `npm run redis:dev`, `npm run sync:clerk`, and the `bench:*` scripts (see [Performance](#performance)).
 
 ---
 
@@ -138,6 +145,7 @@ Server scripts (from `server/`): `npm run dev` (watch mode), `npm test`, `npm ru
 ### Prerequisites
 
 - Node.js 20+ (developed on Node 24)
+- Docker, for Redis and the test database
 - Free accounts: **Clerk** and **Neon**. **Brevo** is optional; without it, only the email jobs fail.
 
 ### 1. Install
@@ -174,6 +182,8 @@ cp client/.env.example client/.env
 | `server/.env` | `NODE_ENV` | `development` (enables readable dev logs) |
 | | `LOG_LEVEL` | Optional: `debug`, `info` (default), `warn`, `error` |
 | | `APP_URL` | Client URL used in email links, e.g. `http://localhost:5173` (required in production) |
+| | `REDIS_URL` | `redis://localhost:6379`. Optional: without it, rate limiting and caching are off |
+| | `RATE_LIMIT_READS_PER_MINUTE`, `RATE_LIMIT_WRITES_PER_MINUTE` | Optional; default 300 and 60 per user |
 | | `CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | | `CLERK_SECRET_KEY` | Clerk secret key (server only, never in the client) |
 | | `DATABASE_URL` | Neon pooled connection string |
@@ -193,6 +203,9 @@ npx prisma migrate deploy
 ### 6. Start everything (three terminals)
 
 ```bash
+# 0. Redis (once; keeps running in Docker)
+cd server && npm run redis:dev
+
 # 1. API: http://localhost:5000
 cd server && npm run dev
 
@@ -225,11 +238,11 @@ Integration tests (Vitest + Supertest) run against a disposable Postgres in Dock
 
 ```bash
 cd server
-npm run db:test   # starts Postgres on localhost:5433 (data kept in memory only)
+npm run db:test   # starts Postgres (5433) and Redis (6380), data kept in memory only
 npm test
 ```
 
-The test run refuses to start unless `DATABASE_URL` points at a local database whose name ends in `_test`. Migrations are applied once per run, and every table is emptied before each test. Clerk is replaced by a test double that reads the user ID from an `x-test-user-id` header, so no production code has a test-only path.
+The test run refuses to start unless `DATABASE_URL` points at a local database whose name ends in `_test`. Migrations are applied once per run, and every table (and the test Redis) is emptied before each test. Clerk is replaced by a test double that reads the user ID from an `x-test-user-id` header, so no production code has a test-only path.
 
 ---
 
@@ -243,7 +256,7 @@ Before, every screen loaded the whole workspace from one endpoint. After, each s
 
 | Screen | Before | After |
 |---|---|---|
-| Dashboard | `GET /api/workspaces` full tree: **p50 6.8 s, p97.5 7.2 s, ~76 MB**, 0.1 req/s (1 connection; 10 connections timed out) | `summary` + `projects`: **p50 36 ms + 23 ms, ~81 KB** (10 connections) |
+| Dashboard | `GET /api/workspaces` full tree: **p50 6.8 s, p97.5 7.2 s, ~76 MB**, 0.1 req/s (1 connection; 10 connections timed out) | `summary` + `projects`: **p50 36 ms + 23 ms, ~81 KB** (10 connections); **5 ms + 7 ms** from the cache (Phase 4) |
 | Project task list | same full tree (**~76 MB**) | one page of 50 tasks: **p50 14 ms, p97.5 19 ms, 37 KB**, 678 req/s |
 | Task list, page after row 2,000 | n/a (everything was loaded) | **p50 14 ms**: same as page 1 (keyset pagination) |
 | Task comments | p50 20 ms (full table scan) | p50 9 ms, 1,057 req/s |
@@ -263,11 +276,36 @@ The overdue count is intentionally left as a sequential scan: it matches about a
 
 **What changed:** the workspace tree was split into screen-shaped endpoints; lists use keyset (cursor) pagination with filters on the server; dashboard numbers are aggregated in SQL; seven indexes were chosen from query plans; responses select only the columns a screen shows. Raw results and query plans are in [`server/bench-results/`](server/bench-results/).
 
+### Caching
+
+The dashboard makes two reads on every load: the **summary** (seven queries) and the **projects list** (projects, members and task counts). Both are cached in Redis per workspace, user and role, for 60 seconds.
+
+| Endpoint (10 connections) | Redis off | Cached | |
+|---|---|---|---|
+| `GET /api/workspaces/:id/summary` | p50 37 ms, p97.5 52 ms, 265 req/s | **p50 5 ms, p97.5 8 ms, 1,744 req/s** | 6.6× throughput |
+| `GET /api/workspaces/:id/projects` (60 KB) | p50 22 ms, p97.5 30 ms, 430 req/s | **p50 7 ms, p97.5 12 ms, 1,233 req/s** | 2.9× throughput |
+| `GET /api/workspaces` (not cached: rate-limit cost) | p50 2 ms, 3,940 req/s | p50 3 ms, 3,048 req/s | ≈ 0.3 ms per request |
+
+**Invalidation: versioned keys.** Each workspace has a counter in Redis, and it's part of every cache key (`cache:ws:<id>:v<version>:<view>:<user>:<role>`). Any write that can change a cached view increments the counter:
+
+- task create, update or delete; project create, update or new member;
+- Clerk sync: user created, renamed or deleted (for each of their workspaces), workspace updated or deleted, member joined.
+
+One increment makes every cached entry of that workspace, for all users, unreachable; the old entries simply expire. Deleting keys instead would need a scan over every user's entries, and has a race where a slow reader writes old data back right after the delete; with versions, that late write lands under a key nobody reads.
+
+- **Read-your-writes:** the counter is incremented before the write's response is sent, so the next read already misses.
+- **Permissions aren't cached:** membership is checked on every request, before the cache. A removed member gets 403 even if an entry exists.
+- **The 60 s TTL is a safety net** for a missed or failed invalidation and for time-based values like "overdue".
+- **Fail open:** if Redis is down, reads go to Postgres.
+
+The benchmark server gets Redis explicitly per scenario (`6379`, database 1, emptied before each scenario), so results don't depend on the local `.env`. Results: [`bench-results/phase-4.json`](server/bench-results/phase-4.json).
+
 ### Reproducing
 
 ```bash
 cd server
 npm run bench:db                 # local Postgres for benchmarks (port 5434)
+npm run redis:dev                # Redis for the cached scenarios (port 6379, database 1)
 npm run bench:seed               # deterministic 50k tasks / 100k comments (~15 s)
 npm run bench -- <label>         # load test → bench-results/<label>.json
 npm run bench:explain -- <label> # EXPLAIN ANALYZE of each query → bench-results/explain-<label>.md
@@ -277,7 +315,7 @@ npm run bench:explain -- <label> # EXPLAIN ANALYZE of each query → bench-resul
 
 ## Security
 
-An audit of the inherited codebase found the issues below. Each was reproduced with a failing integration test **before** the fix, and those tests now run on every change (86 tests in `server/tests/`).
+An audit of the inherited codebase found the issues below. Each was reproduced with a failing integration test **before** the fix, and those tests now run on every change (136 tests in `server/tests/`).
 
 ### Access control
 
@@ -315,7 +353,7 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 
 - **Tests can't touch real systems:** the test run refuses any database that isn't a local `*_test` database, and email sending is stubbed globally.
 - **Secrets stay out of logs:** request logs keep only method, URL, status and timing; authorization headers and cookies are redacted.
-- **Rate limiting** is planned for Phase 4.
+- **Rate limiting:** 300 reads and 60 writes per minute per user (IP address for anonymous requests), shared across API instances through Redis. A sliding-window counter in one Lua script, so the check and the increment are atomic and a burst at a minute boundary can't double the limit. Server-to-server Inngest calls aren't limited. Tested in `rateLimit.test.ts`.
 
 ---
 
@@ -325,7 +363,7 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 - [x] **Phase 1**: Backend in TypeScript (strict); routes → controllers → services layering; central authorization module; typed errors and a central error handler; structured logging with request IDs; task UX fixes and derived project progress
 - [x] **Phase 2**: Security audit with test-first fixes (86 integration tests: Vitest + Supertest on disposable Postgres); Zod validation; centralized authorization with task permission rules; safe, replay-proof background jobs; CORS lock-down
 - [x] **Phase 3**: Screen-shaped endpoints replacing a 76 MB workspace payload; keyset pagination with server-side filters; seven indexes chosen from `EXPLAIN ANALYZE`; benchmarks on a 50k-task dataset (project task list: 7.2 s → 19 ms p97.5)
-- [ ] **Phase 4**: Redis caching with explicit invalidation; per-user rate limiting
+- [x] **Phase 4**: Redis: per-user rate limiting (sliding-window counter in Lua); dashboard cache with versioned-key invalidation (summary 265 → 1,744 req/s); both fail open. Task editing
 - [ ] **Phase 5**: Real-time task and comment updates with Socket.io, in project-scoped authorized rooms
 - [ ] **Phase 6**: Docker Compose (API + Postgres + Redis) and GitHub Actions CI
 

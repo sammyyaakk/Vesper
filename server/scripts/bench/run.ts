@@ -3,7 +3,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import autocannon from "autocannon";
-import { BENCH_DATABASE_URL, BENCH_USER_HEADER, assertBenchDatabase } from "./benchDatabase.js";
+import { Redis } from "ioredis";
+import { BENCH_DATABASE_URL, BENCH_REDIS_URL, BENCH_USER_HEADER, assertBenchDatabase, assertBenchRedis } from "./benchDatabase.js";
 
 const label = process.argv[2] ?? "run";
 const PORT = 5055;
@@ -16,6 +17,7 @@ interface Scenario {
     connections: number;
     durationSeconds: number;
     timeoutSeconds: number;
+    redis: boolean;
 }
 
 assertBenchDatabase(BENCH_DATABASE_URL);
@@ -45,11 +47,16 @@ const dataset = {
 };
 await prisma.$disconnect();
 
-const standard = { connections: 10, durationSeconds: 15, timeoutSeconds: 10 };
+// Redis on is the production setup (rate limiter + cache); the "Redis off" rows show what the cache and limiter cost or save
+const standard = { connections: 10, durationSeconds: 15, timeoutSeconds: 10, redis: true };
+const redisOff = { ...standard, redis: false };
 const scenarios: Scenario[] = [
     { name: "GET /api/workspaces (list)", path: "/api/workspaces", ...standard },
-    { name: "GET /api/workspaces/:id/projects", path: "/api/workspaces/org_bench_main/projects", ...standard },
-    { name: "GET /api/workspaces/:id/summary", path: "/api/workspaces/org_bench_main/summary", ...standard },
+    { name: "GET /api/workspaces (list, Redis off)", path: "/api/workspaces", ...redisOff },
+    { name: "GET /api/workspaces/:id/projects (cached)", path: "/api/workspaces/org_bench_main/projects", ...standard },
+    { name: "GET /api/workspaces/:id/projects (Redis off)", path: "/api/workspaces/org_bench_main/projects", ...redisOff },
+    { name: "GET /api/workspaces/:id/summary (cached)", path: "/api/workspaces/org_bench_main/summary", ...standard },
+    { name: "GET /api/workspaces/:id/summary (Redis off)", path: "/api/workspaces/org_bench_main/summary", ...redisOff },
     { name: "GET /api/projects/:id/tasks (page 1)", path: `/api/projects/${project.id}/tasks?limit=50`, ...standard },
     { name: "GET /api/projects/:id/tasks (after row 2,000)", path: `/api/projects/${project.id}/tasks?limit=50&cursor=${encodeCursor(deepCursor)}`, ...standard },
     { name: "GET /api/projects/:id/tasks?assignee=me", path: `/api/projects/${project.id}/tasks?limit=50&assignee=me`, ...standard },
@@ -58,9 +65,12 @@ const scenarios: Scenario[] = [
     { name: "GET /api/projects/:id/calendar (1 month)", path: `/api/projects/${project.id}/calendar?from=${monthStart}&to=${monthEnd}`, ...standard },
 ];
 
-const startServer = async () => {
+assertBenchRedis(BENCH_REDIS_URL);
+const benchRedis = new Redis(BENCH_REDIS_URL);
+
+const startServer = async (redis: boolean) => {
     const server = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/bench/server.ts"], {
-        env: { ...process.env, BENCH_PORT: String(PORT) },
+        env: { ...process.env, BENCH_PORT: String(PORT), REDIS_URL: redis ? BENCH_REDIS_URL : "" },
         stdio: ["ignore", "ignore", "inherit"],
     });
     for (let attempt = 0; attempt < 60; attempt++) {
@@ -84,7 +94,8 @@ const stopServer = (server: ChildProcess) =>
 const results: Record<string, unknown>[] = [];
 for (const scenario of scenarios) {
     // A fresh server per scenario, so a slow scenario can't leave work behind that skews the next one
-    const server = await startServer();
+    await benchRedis.flushdb();
+    const server = await startServer(scenario.redis);
     try {
         const headers = { [BENCH_USER_HEADER]: BENCH_USER };
         const warmup = await fetch(`${BASE}${scenario.path}`, { headers });
@@ -100,6 +111,7 @@ for (const scenario of scenarios) {
         });
         const summary = {
             scenario: scenario.name,
+            redis: scenario.redis,
             connections: scenario.connections,
             p50_ms: result.latency.p50,
             p97_5_ms: result.latency.p97_5,
@@ -123,5 +135,6 @@ mkdirSync("bench-results", { recursive: true });
 const report = { label, date: new Date().toISOString(), node: process.version, benchUser: BENCH_USER, dataset, scenarios, results };
 writeFileSync(`bench-results/${label}.json`, JSON.stringify(report, null, 2) + "\n");
 console.table(results.map(({ scenario, connections, p50_ms, p97_5_ms, p99_ms, req_per_s, kb_per_response, errors }) => ({ scenario, connections, p50_ms, p97_5_ms, p99_ms, req_per_s, kb_per_response, errors })));
+await benchRedis.quit();
 console.log(`Saved bench-results/${label}.json`);
 process.exit(0);

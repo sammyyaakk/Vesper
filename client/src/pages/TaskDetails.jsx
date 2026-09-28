@@ -5,8 +5,11 @@ import { useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import api from "../configs/api";
-import { CalendarIcon, FileIcon, MessageCircle, PenIcon, UserCircle2 } from "lucide-react";
-import { authHeaders } from "../features/workspaceSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { CalendarIcon, FileIcon, MessageCircle, PenIcon, Pencil, UserCircle2 } from "lucide-react";
+import { authHeaders, refreshWorkspace } from "../features/workspaceSlice";
+import TaskFormDialog from "../components/TaskFormDialog";
+import { canManageProject } from "../utils/permissions";
 
 const TaskDetails = () => {
     const [searchParams] = useSearchParams();
@@ -20,6 +23,9 @@ const TaskDetails = () => {
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(true);
+    const [editing, setEditing] = useState(false);
+    const dispatch = useDispatch();
+    const workspaceRole = useSelector((state) => state.workspace.currentWorkspace?.role);
 
     const [nextCursor, setNextCursor] = useState(null);
     const endCursor = useRef(null);
@@ -114,6 +120,11 @@ const TaskDetails = () => {
         }
     };
 
+    const handleTaskSaved = (updated) => {
+        setTask((prev) => ({ ...prev, ...updated }));
+        dispatch(refreshWorkspace({ getToken }));
+    };
+
     if (loading) return <div className="text-gray-500 dark:text-zinc-400 px-4 py-6">Loading task details...</div>;
     if (!task) return <div className="text-red-500 px-4 py-6">Task not found.</div>;
 
@@ -173,7 +184,14 @@ const TaskDetails = () => {
                 {/* Task Info */}
                 <div className="p-5 rounded-md bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-800 ">
                     <div className="mb-3">
-                        <h1 className="text-lg font-medium text-gray-900 dark:text-zinc-100">{task.title}</h1>
+                        <div className="flex items-start justify-between gap-3">
+                            <h1 className="text-lg font-medium text-gray-900 dark:text-zinc-100">{task.title}</h1>
+                            {canManageProject(project, user?.id, workspaceRole) && (
+                                <button type="button" onClick={() => setEditing(true)} className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded text-sm border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                                    <Pencil className="size-3.5" /> Edit
+                                </button>
+                            )}
+                        </div>
                         <div className="flex flex-wrap gap-2 mt-2">
                             <span className="px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-300 text-xs">
                                 {task.status}
@@ -219,6 +237,8 @@ const TaskDetails = () => {
                     </div>
                 )}
             </div>
+
+            {editing && <TaskFormDialog project={project} task={task} onClose={() => setEditing(false)} onSaved={handleTaskSaved} />}
         </div>
     );
 };

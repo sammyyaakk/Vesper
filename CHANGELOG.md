@@ -2,6 +2,29 @@
 
 Each phase lists what changed and why.
 
+## Phase 4: Redis (rate limiting and caching)
+
+### Redis
+- Shared `ioredis` client (`configs/redis.ts`). Redis is optional: without `REDIS_URL`, or while it's down, rate limiting and caching are skipped and requests go to Postgres (fail open). Commands fail fast instead of queueing while disconnected, so an outage can't make requests hang.
+- Local Redis in Docker for development (`npm run redis:dev`, port 6379) and a separate, non-persistent one for tests (port 6380), emptied before each test behind a guard.
+- An outage is logged once with its error code, and recovery once, instead of an empty error on every reconnect attempt.
+
+### Rate limiting
+- Per user (IP address when anonymous): 300 reads and 60 writes per minute, configurable with `RATE_LIMIT_READS_PER_MINUTE` and `RATE_LIMIT_WRITES_PER_MINUTE`.
+- Sliding-window counter in one Lua script: the check and the increment are atomic across API instances, and a burst at a window boundary can't double the limit. Rejected requests aren't counted.
+- `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` on every API response; `429` with a computed `Retry-After` over the limit. The Inngest endpoint isn't limited.
+
+### Caching
+- The dashboard summary and the projects list are cached per workspace, user and role for 60 seconds.
+- Invalidation by versioned keys: every task, project and membership write, and every Clerk sync handler, increments the workspace's version, orphaning all of its entries at once. Permissions are still checked on every request, before the cache.
+- Benchmarks (50k tasks, 10 connections): summary p50 37 → 5 ms, 265 → 1,744 req/s; projects list p50 22 → 7 ms, 430 → 1,233 req/s. The rate limiter costs about 0.3 ms per request.
+- Benchmarks now set Redis on or off per scenario, using their own Redis database, instead of inheriting `REDIS_URL` from `.env`.
+
+### Product
+- Tasks can be edited after creation (from the task page and the task menu) by the project lead or a workspace admin. Create and edit share one form.
+- Tasks on the dashboard (Recent Activity and the summary cards) are links to the task.
+- Fixed: clearing a task's description in an update was silently ignored. Omitted fields stay unchanged; blank ones are cleared.
+
 ## Phase 3: Performance
 
 Measured on a seeded 50,000-task / 100,000-comment dataset. See README → Performance for the tables.

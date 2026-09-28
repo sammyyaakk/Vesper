@@ -7,22 +7,37 @@ import api from "../configs/api";
 
 const RequiredMark = () => <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>;
 
-export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, project, onCreated }) {
+const emptyForm = {
+    title: "",
+    description: "",
+    type: "TASK",
+    status: "TODO",
+    priority: "MEDIUM",
+    assigneeId: "",
+    dueDate: "",
+};
+
+// Due dates are stored as midnight UTC of the picked day, so the UTC date is the one to show in the date input
+const formFromTask = (task) => ({
+    title: task.title,
+    description: task.description ?? "",
+    type: task.type,
+    status: task.status,
+    priority: task.priority,
+    assigneeId: task.assigneeId ?? "",
+    dueDate: task.dueDate.slice(0, 10),
+});
+
+// Creates a task, or edits `task` when one is passed
+export default function TaskFormDialog({ project, task, onClose, onSaved }) {
     const { getToken } = useAuth();
     const { user } = useUser();
     const teamMembers = project?.members || [];
     const isProjectMember = teamMembers.some((member) => member.user.id === user?.id);
+    const isEdit = Boolean(task);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState({
-        title: "",
-        description: "",
-        type: "TASK",
-        status: "TODO",
-        priority: "MEDIUM",
-        assigneeId: "",
-        dueDate: "",
-    });
+    const [formData, setFormData] = useState(() => (isEdit ? formFromTask(task) : emptyForm));
 
     const isValid = formData.title.trim() !== "" && formData.dueDate !== "";
 
@@ -32,21 +47,14 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         setIsSubmitting(true);
 
         try {
-            const { data } = await api.post("/api/tasks", { ...formData, projectId: project.id }, { headers: { Authorization: `Bearer ${await getToken()}` } });
-
-            setShowCreateTask(false);
-            setFormData({
-                title: "",
-                description: "",
-                type: "TASK",
-                status: "TODO",
-                priority: "MEDIUM",
-                assigneeId: "",
-                dueDate: "",
-            });
+            const config = { headers: { Authorization: `Bearer ${await getToken()}` } };
+            const { data } = isEdit
+                ? await api.put(`/api/tasks/${task.id}`, formData, config)
+                : await api.post("/api/tasks", { ...formData, projectId: project.id }, config);
 
             toast.success(data.message);
-            onCreated?.(data.task);
+            onSaved?.(data.task);
+            onClose();
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message);
         } finally {
@@ -54,10 +62,10 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         }
     };
 
-    return showCreateTask ? (
+    return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/60 backdrop-blur">
             <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg shadow-lg w-full max-w-md p-6 text-zinc-900 dark:text-white">
-                <h2 className="text-xl font-bold mb-4">Create New Task</h2>
+                <h2 className="text-xl font-bold mb-4">{isEdit ? "Edit Task" : "Create New Task"}</h2>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Title */}
@@ -69,7 +77,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                     {/* Description */}
                     <div className="space-y-1">
                         <label htmlFor="description" className="text-sm font-medium">Description</label>
-                        <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe the task" className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe the task" className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
 
                     {/* Type & Priority */}
@@ -87,7 +95,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium">Priority</label>
-                            <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1"                             >
+                            <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" >
                                 <option value="LOW">Low</option>
                                 <option value="MEDIUM">Medium</option>
                                 <option value="HIGH">High</option>
@@ -126,12 +134,12 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         </div>
                     </div>
 
-                    {/* Due Date */}
+                    {/* Due Date: new tasks can't start overdue; an existing overdue task keeps its date unless changed */}
                     <div className="space-y-1">
                         <label htmlFor="dueDate" className="text-sm font-medium">Due Date<RequiredMark /></label>
                         <div className="flex items-center gap-2">
                             <CalendarIcon className="size-5 text-zinc-500 dark:text-zinc-400" />
-                            <input id="dueDate" type="date" required value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" />
+                            <input id="dueDate" type="date" required value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} min={isEdit ? undefined : new Date().toISOString().split('T')[0]} className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1" />
                         </div>
                         {formData.dueDate && (
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -143,15 +151,15 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                     {/* Footer */}
                     <div className="flex items-center justify-end gap-2 pt-2">
                         <p className="mr-auto text-xs text-zinc-500 dark:text-zinc-400"><span className="text-red-500">*</span> Required</p>
-                        <button type="button" onClick={() => setShowCreateTask(false)} className="rounded border border-zinc-300 dark:border-zinc-700 px-5 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" >
+                        <button type="button" onClick={onClose} className="rounded border border-zinc-300 dark:border-zinc-700 px-5 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" >
                             Cancel
                         </button>
                         <button type="submit" disabled={!isValid || isSubmitting} title={!isValid ? "Fill in the required fields" : undefined} className="rounded px-5 py-2 text-sm bg-gradient-to-br from-blue-500 to-blue-600 hover:opacity-90 text-white dark:text-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed" >
-                            {isSubmitting ? "Creating..." : "Create Task"}
+                            {isSubmitting ? "Saving..." : isEdit ? "Save Changes" : "Create Task"}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
-    ) : null;
+    );
 }
