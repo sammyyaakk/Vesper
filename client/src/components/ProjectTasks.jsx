@@ -1,6 +1,6 @@
 import api from "../configs/api";
 import toast from "react-hot-toast";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useSelector } from "react-redux";
@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import TaskActionsMenu from "./TaskActionsMenu";
 import TaskFormDialog from "./TaskFormDialog";
 import { canManageProject } from "../utils/permissions";
+import { useProjectRoom } from "../realtime/useProjectRoom";
 
 const typeIcons = {
     BUG: { icon: Bug, color: "text-red-600 dark:text-red-400" },
@@ -89,6 +90,46 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
             setLoadingMore(false);
         }
     };
+
+    const reloadFirstPage = useCallback(async () => {
+        try {
+            const data = await fetchPage();
+            setTasks(data.tasks);
+            setNextCursor(data.nextCursor);
+        } catch {
+            // the next change or reconnect tries again
+        }
+    }, [fetchPage]);
+
+    // Other people's changes also move the project's counts; a burst of events refreshes them once
+    const changedTimer = useRef(null);
+    const onChangedSoon = () => {
+        clearTimeout(changedTimer.current);
+        changedTimer.current = setTimeout(() => onChanged?.(), 500);
+    };
+    useEffect(() => () => clearTimeout(changedTimer.current), []);
+
+    const hasFilters = Object.values(filters).some(Boolean);
+
+    useProjectRoom(projectId, {
+        onTaskCreated: (task) => {
+            if (hasFilters) reloadFirstPage();
+            else setTasks((prev) => (prev.some((t) => t.id === task.id) ? prev : [task, ...prev]));
+            onChangedSoon();
+        },
+        onTaskUpdated: (task) => {
+            replaceTask(task);
+            onChangedSoon();
+        },
+        onTasksDeleted: ({ taskIds }) => {
+            setTasks((prev) => prev.filter((task) => !taskIds.includes(task.id)));
+            onChangedSoon();
+        },
+        onResync: () => {
+            reloadFirstPage();
+            onChangedSoon();
+        },
+    });
 
     const replaceTask = (updated) => setTasks((prev) => prev.map((task) => (task.id === updated.id ? { ...task, ...updated } : task)));
 

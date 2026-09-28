@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { verifyToken } from "@clerk/express";
+import type { Comment, Task, User } from "@prisma/client";
 import { Server } from "socket.io";
 import { appUrl } from "../configs/appUrl.js";
 import { logger } from "../configs/logger.js";
@@ -15,11 +16,19 @@ interface ClientToServerEvents {
     "project:leave": (projectId: unknown, ack: () => void) => void;
 }
 
+// Same shapes as the REST responses for these writes
+export interface ServerToClientEvents {
+    "task:created": (task: Task & { assignee: User | null }) => void;
+    "task:updated": (task: Task & { assignee: User | null }) => void;
+    "tasks:deleted": (payload: { projectId: string; taskIds: string[] }) => void;
+    "comment:created": (comment: Comment & { user: User }) => void;
+}
+
 export interface SocketData {
     userId: string;
 }
 
-type RealtimeServer = Server<ClientToServerEvents, Record<string, never>, Record<string, never>, SocketData>;
+type RealtimeServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 export const projectRoom = (projectId: string) => `project:${projectId}`;
 const userRoom = (userId: string) => `user:${userId}`;
@@ -81,6 +90,11 @@ export const createRealtime = (httpServer: HttpServer) => {
 
     current = io;
     return io;
+};
+
+// Call only after the database write has succeeded
+export const emitToProject = <E extends keyof ServerToClientEvents>(projectId: string, event: E, ...args: Parameters<ServerToClientEvents[E]>) => {
+    current?.to(projectRoom(projectId)).emit(event, ...args);
 };
 
 // Called after a membership change: the user's sockets leave every project room in the workspace they can no longer access

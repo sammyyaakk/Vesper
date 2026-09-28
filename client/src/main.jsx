@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { store } from './app/store.js'
 import { Provider } from 'react-redux'
 import { ClerkProvider } from '@clerk/clerk-react'
+import RealtimeProvider from './realtime/RealtimeProvider.jsx'
 
 
 // Import your Publishable Key
@@ -18,7 +19,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
         <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
             <Provider store={store}>
-                <App />
+                <RealtimeProvider>
+                    <App />
+                </RealtimeProvider>
             </Provider>
         </ClerkProvider>
     </BrowserRouter>,
