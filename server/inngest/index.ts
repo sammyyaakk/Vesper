@@ -18,6 +18,14 @@ const syncWorkspaceDeletion = inngest.createFunction({ id: "delete-workspace-wit
 
 const syncWorkspaceMemberCreation = inngest.createFunction({ id: "sync-workspace-member-from-clerk" }, { event: "clerk/organizationInvitation.accepted" }, ({ event }) => handlers.handleWorkspaceMemberCreation(event));
 
+const syncWorkspaceMemberChange = inngest.createFunction(
+    { id: "sync-workspace-member-change-from-clerk" },
+    [{ event: "clerk/organizationMembership.created" }, { event: "clerk/organizationMembership.updated" }],
+    ({ event }) => handlers.handleWorkspaceMemberChange(event),
+);
+
+const syncWorkspaceMemberDeletion = inngest.createFunction({ id: "remove-workspace-member-with-clerk" }, { event: "clerk/organizationMembership.deleted" }, ({ event }) => handlers.handleWorkspaceMemberDeletion(event));
+
 const sendTaskAssignmentEmail = inngest.createFunction({ id: "send-task-assignment-mail" }, { event: "app/task.assigned" }, ({ event, step }) => handlers.handleTaskAssigned(event, step));
 
 const sendTaskDueReminder = inngest.createFunction(
@@ -32,4 +40,4 @@ const sendTaskDueReminder = inngest.createFunction(
     ({ event, step }) => handlers.handleTaskReminder(event, step),
 );
 
-export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation, sendTaskAssignmentEmail, sendTaskDueReminder];
+export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation, syncWorkspaceMemberChange, syncWorkspaceMemberDeletion, sendTaskAssignmentEmail, sendTaskDueReminder];

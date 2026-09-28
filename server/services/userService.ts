@@ -39,3 +39,37 @@ export const removeUser = (userId: string) =>
 
         await tx.user.deleteMany({ where: { id: userId } });
     });
+
+// Someone removed from one workspace: the same hand-over as removeUser, limited to that workspace, plus their assignments there
+export const removeFromWorkspace = (workspaceId: string, userId: string) =>
+    prisma.$transaction(async (tx) => {
+        const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
+        if (!workspace) return;
+
+        let ownerId = workspace.ownerId;
+        if (ownerId === userId) {
+            const successor = await pickSuccessor(tx, workspaceId, userId);
+            if (successor) {
+                await tx.workspaceMember.update({ where: { id: successor.id }, data: { role: "ADMIN" } });
+                await tx.workspace.update({ where: { id: workspaceId }, data: { ownerId: successor.userId } });
+                ownerId = successor.userId;
+            }
+        }
+
+        if (ownerId !== userId) {
+            const ledProjects = await tx.project.findMany({ where: { workspaceId, teamLead: userId }, select: { id: true } });
+            for (const { id: projectId } of ledProjects) {
+                await tx.project.update({ where: { id: projectId }, data: { teamLead: ownerId } });
+                await tx.projectMember.upsert({
+                    where: { userId_projectId: { userId: ownerId, projectId } },
+                    create: { userId: ownerId, projectId },
+                    update: {},
+                });
+            }
+        }
+
+        const inWorkspace = { project: { workspaceId } };
+        await tx.projectMember.deleteMany({ where: { userId, ...inWorkspace } });
+        await tx.task.updateMany({ where: { assigneeId: userId, ...inWorkspace }, data: { assigneeId: null } });
+        await tx.workspaceMember.deleteMany({ where: { userId, workspaceId } });
+    });
