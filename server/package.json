@@ -16,7 +16,8 @@
     "bench:db": "docker compose -f ../compose.bench.yaml up -d --wait",
     "bench:seed": "tsx scripts/bench/seed.ts",
     "bench": "tsx scripts/bench/run.ts",
-    "bench:explain": "tsx scripts/bench/explain.ts"
+    "bench:explain": "tsx scripts/bench/explain.ts",
+    "redis:dev": "docker compose -f ../compose.dev.yaml up -d --wait"
   },
   "keywords": [],
   "author": "",
@@ -47,6 +48,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "inngest": "^3.44.2",
+    "ioredis": "6.0.0",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.9",
     "pino": "10.3.1",
