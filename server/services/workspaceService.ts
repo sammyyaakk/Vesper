@@ -2,21 +2,14 @@ import prisma from "../configs/prisma.js";
 import { accessibleProjects, requireWorkspaceMembership } from "./authorization.js";
 import { taskCountsByProject } from "./taskCounts.js";
 
-// Legacy: the whole workspace tree. Replaced by the focused endpoints below; removed once the client has moved (3.6)
-export const listForUser = (userId: string) =>
-    prisma.workspace.findMany({
-        where: { members: { some: { userId } } },
-        include: {
-            members: { include: { user: true } },
-            projects: {
-                include: {
-                    tasks: { include: { assignee: true, comments: { include: { user: true } } } },
-                    members: { include: { user: true } },
-                },
-            },
-            owner: true,
-        },
+export const listForUser = async (userId: string) => {
+    const memberships = await prisma.workspaceMember.findMany({
+        where: { userId },
+        include: { workspace: { select: { id: true, name: true, slug: true, imageUrl: true, ownerId: true } } },
+        orderBy: { workspace: { name: "asc" } },
     });
+    return memberships.map(({ workspace, role }) => ({ ...workspace, role }));
+};
 
 export const get = async (userId: string, workspaceId: string) => {
     const role = await requireWorkspaceMembership(workspaceId, userId);

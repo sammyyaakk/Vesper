@@ -1,10 +1,10 @@
 import api from "../configs/api";
 import toast from "react-hot-toast";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { useDispatch } from "react-redux";
-import { deleteTask, updateTask } from "../features/workspaceSlice";
+import { useSelector } from "react-redux";
+import { authHeaders } from "../features/workspaceSlice";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import TaskActionsMenu from "./TaskActionsMenu";
@@ -23,8 +23,9 @@ const priorityTexts = {
     HIGH: { background: "bg-emerald-100 dark:bg-emerald-950", prioritycolor: "text-emerald-600 dark:text-emerald-400" },
 };
 
-const ProjectTasks = ({ tasks }) => {
-    const dispatch = useDispatch();
+const PAGE_SIZE = 50;
+
+const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
     const { getToken } = useAuth();
     const { user } = useUser();
     const navigate = useNavigate();
@@ -37,22 +38,55 @@ const ProjectTasks = ({ tasks }) => {
         assignee: "",
     });
 
-    const assigneeList = useMemo(
-        () => Array.from(new Set(tasks.map((t) => t.assignee?.name).filter(Boolean))),
-        [tasks]
+    const [tasks, setTasks] = useState([]);
+    const [nextCursor, setNextCursor] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const members = useSelector((state) => state.workspace.projects.find((p) => p.id === projectId)?.members ?? []);
+
+    // Filters run on the server; only non-empty ones are sent
+    const fetchPage = useCallback(
+        async (cursor) => {
+            const params = Object.fromEntries(Object.entries({ ...filters, cursor, limit: PAGE_SIZE }).filter(([, value]) => value));
+            const { data } = await api.get(`/api/projects/${projectId}/tasks`, { ...(await authHeaders(getToken)), params });
+            return data;
+        },
+        [projectId, filters, getToken]
     );
 
-    const filteredTasks = useMemo(() => {
-        return tasks.filter((task) => {
-            const { status, type, priority, assignee } = filters;
-            return (
-                (!status || task.status === status) &&
-                (!type || task.type === type) &&
-                (!priority || task.priority === priority) &&
-                (!assignee || task.assignee?.name === assignee)
-            );
-        });
-    }, [filters, tasks]);
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        fetchPage()
+            .then((data) => {
+                if (cancelled) return;
+                setTasks(data.tasks);
+                setNextCursor(data.nextCursor);
+            })
+            .catch((error) => toast.error(error?.response?.data?.message || error.message))
+            .finally(() => !cancelled && setLoading(false));
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchPage, reloadKey]);
+
+    const loadMore = async () => {
+        setLoadingMore(true);
+        try {
+            const data = await fetchPage(nextCursor);
+            setTasks((prev) => [...prev, ...data.tasks]);
+            setNextCursor(data.nextCursor);
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    const replaceTask = (updated) => setTasks((prev) => prev.map((task) => (task.id === updated.id ? { ...task, ...updated } : task)));
+
+    const filteredTasks = tasks;
 
     const visibleIds = filteredTasks.map((t) => t.id);
     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedTasks.includes(id));
@@ -85,7 +119,8 @@ const ProjectTasks = ({ tasks }) => {
         try {
             const token = await getToken();
             const { data } = await api.put(`/api/tasks/${task.id}`, { assigneeId }, { headers: { Authorization: `Bearer ${token}` } });
-            dispatch(updateTask({ ...task, ...data.task }));
+            replaceTask(data.task);
+            onChanged?.();
             toast.success(assigneeId ? "Task assigned to you" : "You're no longer assigned");
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message);
@@ -104,11 +139,9 @@ const ProjectTasks = ({ tasks }) => {
             toast.loading("Updating status...");
             const token = await getToken();
 
-            await api.put(`/api/tasks/${taskId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
-
-            let updatedTask = structuredClone(tasks.find((t) => t.id === taskId));
-            updatedTask.status = newStatus;
-            dispatch(updateTask(updatedTask));
+            const { data } = await api.put(`/api/tasks/${taskId}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+            replaceTask(data.task);
+            onChanged?.();
 
             toast.dismissAll();
             toast.success("Task status updated successfully");
@@ -128,8 +161,9 @@ const ProjectTasks = ({ tasks }) => {
             toast.loading("Deleting tasks...");
 
             await api.post("/api/tasks/delete", { tasksIds: taskIds }, { headers: { Authorization: `Bearer ${token}` } });
-            dispatch(deleteTask(taskIds));
+            setTasks((prev) => prev.filter((task) => !taskIds.includes(task.id)));
             setSelectedTasks((prev) => prev.filter((id) => !taskIds.includes(id)));
+            onChanged?.();
 
             toast.dismissAll();
             toast.success(taskIds.length === 1 ? "Task deleted" : `${taskIds.length} tasks deleted`);
@@ -167,13 +201,16 @@ const ProjectTasks = ({ tasks }) => {
                         ],
                         assignee: [
                             { label: "All Assignees", value: "" },
-                            ...assigneeList.map((n) => ({ label: n, value: n })),
+                            { label: "Assigned to me", value: "me" },
+                            { label: "Unassigned", value: "none" },
+                            ...members.map((member) => ({ label: member.user.name, value: member.user.id })),
                         ],
                     };
                     return (
                         <select
                             key={name}
                             name={name}
+                            value={filters[name]}
                             onChange={handleFilterChange}
                             className=" border not-dark:bg-white border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200"
                         >
@@ -305,7 +342,7 @@ const ProjectTasks = ({ tasks }) => {
                                 ) : (
                                     <tr>
                                         <td colSpan="8" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
-                                            No tasks found for the selected filters.
+                                            {loading ? "Loading tasks..." : "No tasks found for the selected filters."}
                                         </td>
                                     </tr>
                                 )}
@@ -381,12 +418,25 @@ const ProjectTasks = ({ tasks }) => {
                             })
                         ) : (
                             <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">
-                                No tasks found for the selected filters.
+                                {loading ? "Loading tasks..." : "No tasks found for the selected filters."}
                             </p>
                         )}
                     </div>
                 </div>
             </div>
+
+            {nextCursor && (
+                <div className="flex justify-center mt-4">
+                    <button
+                        type="button"
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="px-4 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                        {loadingMore ? "Loading..." : "Load more"}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

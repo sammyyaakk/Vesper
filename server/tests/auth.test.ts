@@ -8,7 +8,7 @@ describe("authentication", () => {
         expect(res.status).toBe(200);
     });
 
-    it.each(["/api/workspaces", "/api/comments/some-task"])("rejects %s without a session", async (url) => {
+    it.each(["/api/workspaces", "/api/tasks/some-task/comments"])("rejects %s without a session", async (url) => {
         const res = await anonymous().get(url);
         expect(res.status).toBe(401);
         expect(res.body).toEqual({ message: "Unauthorized" });

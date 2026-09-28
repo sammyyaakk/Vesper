@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
-import { useDispatch, useSelector } from "react-redux";
-import { addTask } from "../features/workspaceSlice";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
@@ -9,12 +7,9 @@ import api from "../configs/api";
 
 const RequiredMark = () => <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>;
 
-export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId }) {
+export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, project, onCreated }) {
     const { getToken } = useAuth();
     const { user } = useUser();
-    const dispatch = useDispatch();
-    const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
-    const project = currentWorkspace?.projects.find((p) => p.id === projectId);
     const teamMembers = project?.members || [];
     const isProjectMember = teamMembers.some((member) => member.user.id === user?.id);
 
@@ -37,7 +32,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         setIsSubmitting(true);
 
         try {
-            const { data } = await api.post("/api/tasks", { ...formData, workspaceId: currentWorkspace.id, projectId }, { headers: { Authorization: `Bearer ${await getToken()}` } });
+            const { data } = await api.post("/api/tasks", { ...formData, projectId: project.id }, { headers: { Authorization: `Bearer ${await getToken()}` } });
 
             setShowCreateTask(false);
             setFormData({
@@ -51,7 +46,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             });
 
             toast.success(data.message);
-            dispatch(addTask(data.task));
+            onCreated?.(data.task);
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message);
         } finally {

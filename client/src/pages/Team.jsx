@@ -1,27 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { UsersIcon, Search, UserPlus, Mail, Shield, Activity } from "lucide-react";
 import InviteMemberDialog from "../components/InviteMemberDialog";
 import { useSelector } from "react-redux";
 
 const Team = () => {
 
-    const [tasks, setTasks] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [users, setUsers] = useState([]);
-    const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace || null);
-    const projects = currentWorkspace?.projects || [];
+    const { currentWorkspace, projects, summary } = useSelector((state) => state.workspace);
+    const users = currentWorkspace?.members || [];
 
     const filteredUsers = users.filter(
         (user) =>
             user?.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user?.user?.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
-    useEffect(() => {
-        setUsers(currentWorkspace?.members || []);
-        setTasks(currentWorkspace?.projects?.reduce((acc, project) => [...acc, ...project.tasks], []) || []);
-    }, [currentWorkspace]);
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
@@ -74,7 +67,7 @@ const Team = () => {
                     <div className="flex items-center justify-between gap-8 md:gap-22">
                         <div>
                             <p className="text-sm text-gray-500 dark:text-zinc-400">Total Tasks</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{tasks.length}</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">{summary?.tasks.total ?? 0}</p>
                         </div>
                         <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-500/10">
                             <Shield className="size-4 text-purple-500 dark:text-purple-200" />

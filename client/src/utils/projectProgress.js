@@ -1,5 +1,4 @@
-export const getProjectProgress = (tasks = []) => {
-    if (tasks.length === 0) return 0;
-    const done = tasks.filter((task) => task.status === "DONE").length;
-    return Math.round((done / tasks.length) * 100);
+export const getProjectProgress = (taskCounts) => {
+    if (!taskCounts?.total) return 0;
+    return Math.round((taskCounts.done / taskCounts.total) * 100);
 };

@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useState, useEffect, useCallback } from "react";
+import { useDispatch } from "react-redux";
+import { useAuth } from "@clerk/clerk-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, PlusIcon, SettingsIcon, BarChart3Icon, CalendarIcon, FileStackIcon, ZapIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, SettingsIcon, BarChart3Icon, CalendarIcon, FileStackIcon, ZapIcon, Loader2Icon } from "lucide-react";
+import api from "../configs/api";
+import { authHeaders, refreshWorkspace } from "../features/workspaceSlice";
 import ProjectAnalytics from "../components/ProjectAnalytics";
 import ProjectSettings from "../components/ProjectSettings";
 import CreateTaskDialog from "../components/CreateTaskDialog";
@@ -15,10 +18,12 @@ export default function ProjectDetail() {
     const id = searchParams.get('id');
 
     const navigate = useNavigate();
-    const projects = useSelector((state) => state?.workspace?.currentWorkspace?.projects || []);
+    const dispatch = useDispatch();
+    const { getToken } = useAuth();
 
     const [project, setProject] = useState(null);
-    const [tasks, setTasks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [reloadKey, setReloadKey] = useState(0);
     const [showCreateTask, setShowCreateTask] = useState(false);
     const [activeTab, setActiveTab] = useState(tab || "tasks");
 
@@ -26,13 +31,32 @@ export default function ProjectDetail() {
         if (tab) setActiveTab(tab);
     }, [tab]);
 
-    useEffect(() => {
-        if (projects && projects.length > 0) {
-            const proj = projects.find((p) => p.id === id);
-            setProject(proj);
-            setTasks(proj?.tasks || []);
+    const loadProject = useCallback(async () => {
+        try {
+            const { data } = await api.get(`/api/projects/${id}`, await authHeaders(getToken));
+            setProject(data.project);
+        } catch {
+            setProject(null);
+        } finally {
+            setLoading(false);
         }
-    }, [id, projects]);
+    }, [id, getToken]);
+
+    useEffect(() => {
+        setLoading(true);
+        loadProject();
+    }, [loadProject]);
+
+    // Any change inside the project: reload its counts here and the workspace-level lists (dashboard, sidebar)
+    const handleProjectChanged = useCallback(() => {
+        loadProject();
+        dispatch(refreshWorkspace({ getToken }));
+    }, [loadProject, dispatch, getToken]);
+
+    const handleTaskCreated = () => {
+        setReloadKey((key) => key + 1);
+        handleProjectChanged();
+    };
 
     const statusColors = {
         PLANNING: "bg-zinc-200 text-zinc-900 dark:bg-zinc-600 dark:text-zinc-200",
@@ -41,6 +65,14 @@ export default function ProjectDetail() {
         COMPLETED: "bg-blue-200 text-blue-900 dark:bg-blue-500 dark:text-blue-900",
         CANCELLED: "bg-red-200 text-red-900 dark:bg-red-500 dark:text-red-900",
     };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2Icon className="size-7 text-blue-500 animate-spin" />
+            </div>
+        );
+    }
 
     if (!project) {
         return (
@@ -83,9 +115,9 @@ export default function ProjectDetail() {
             {/* Info Cards */}
             <div className="grid grid-cols-2 sm:flex flex-wrap gap-6">
                 {[
-                    { label: "Total Tasks", value: tasks.length, color: "text-zinc-900 dark:text-white" },
-                    { label: "Completed", value: tasks.filter((t) => t.status === "DONE").length, color: "text-emerald-700 dark:text-emerald-400" },
-                    { label: "In Progress", value: tasks.filter((t) => t.status === "IN_PROGRESS").length, color: "text-amber-700 dark:text-amber-400" },
+                    { label: "Total Tasks", value: project.taskCounts.total, color: "text-zinc-900 dark:text-white" },
+                    { label: "Completed", value: project.taskCounts.done, color: "text-emerald-700 dark:text-emerald-400" },
+                    { label: "In Progress", value: project.taskCounts.inProgress, color: "text-amber-700 dark:text-amber-400" },
                     { label: "Team Members", value: project.members?.length || 0, color: "text-blue-700 dark:text-blue-400" },
                 ].map((card, idx) => (
                     <div key={idx} className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex justify-between sm:min-w-60 p-4 py-2.5 rounded">
@@ -124,29 +156,29 @@ export default function ProjectDetail() {
                 <div className="mt-6">
                     {activeTab === "tasks" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectTasks tasks={tasks} />
+                            <ProjectTasks projectId={id} reloadKey={reloadKey} onChanged={handleProjectChanged} />
                         </div>
                     )}
                     {activeTab === "analytics" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectAnalytics tasks={tasks} project={project} />
+                            <ProjectAnalytics projectId={id} project={project} reloadKey={reloadKey} />
                         </div>
                     )}
                     {activeTab === "calendar" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectCalendar tasks={tasks} />
+                            <ProjectCalendar projectId={id} reloadKey={reloadKey} />
                         </div>
                     )}
                     {activeTab === "settings" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectSettings project={project} />
+                            <ProjectSettings project={project} onChanged={handleProjectChanged} />
                         </div>
                     )}
                 </div>
             </div>
 
             {/* Create Task Modal */}
-            {showCreateTask && <CreateTaskDialog showCreateTask={showCreateTask} setShowCreateTask={setShowCreateTask} projectId={id} />}
+            {showCreateTask && <CreateTaskDialog showCreateTask={showCreateTask} setShowCreateTask={setShowCreateTask} project={project} onCreated={handleTaskCreated} />}
         </div>
     );
 }

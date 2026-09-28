@@ -37,10 +37,10 @@ const ProjectCard = ({ project }) => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 dark:text-zinc-500">Progress</span>
-                    <span className="text-gray-400 dark:text-zinc-400">{getProjectProgress(project.tasks)}%</span>
+                    <span className="text-gray-400 dark:text-zinc-400">{getProjectProgress(project.taskCounts)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-zinc-800 h-1.5 rounded">
-                    <div className="h-1.5 rounded bg-blue-500" style={{ width: `${getProjectProgress(project.tasks)}%` }} />
+                    <div className="h-1.5 rounded bg-blue-500" style={{ width: `${getProjectProgress(project.taskCounts)}%` }} />
                 </div>
             </div>
 

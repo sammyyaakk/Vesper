@@ -86,7 +86,7 @@ describe("comments validation", () => {
 
     it("rejects a malformed task ID in the URL", async () => {
         const { member } = await createTeam();
-        const res = await as(member.id).get("/api/comments/not-a-uuid");
+        const res = await as(member.id).get("/api/tasks/not-a-uuid/comments");
         expect(res.status).toBe(400);
     });
 });
@@ -132,9 +132,8 @@ describe("POST /api/projects validation", () => {
 
 describe("PUT /api/projects validation", () => {
     it("accepts the full project object the settings page sends back", async () => {
-        const { admin, workspace } = await createTeam();
-        const list = await as(admin.id).get("/api/workspaces");
-        const project = list.body.workspaces[0].projects[0];
+        const { admin, workspace, project: created } = await createTeam();
+        const { project } = (await as(admin.id).get(`/api/projects/${created.id}`)).body;
 
         const res = await as(admin.id)
             .put("/api/projects")

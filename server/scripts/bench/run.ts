@@ -44,9 +44,7 @@ await prisma.$disconnect();
 
 const standard = { connections: 10, durationSeconds: 15, timeoutSeconds: 10 };
 const scenarios: Scenario[] = [
-    // The legacy endpoint returns the whole workspace (~77 MB); 10 connections time out, so it runs with 1
-    { name: "GET /api/workspaces (full tree)", path: "/api/workspaces", connections: 1, durationSeconds: 30, timeoutSeconds: 60 },
-    { name: "GET /api/comments/:taskId", path: `/api/comments/${task.id}`, ...standard },
+    { name: "GET /api/workspaces (list)", path: "/api/workspaces", ...standard },
     { name: "GET /api/workspaces/:id/projects", path: "/api/workspaces/org_bench_main/projects", ...standard },
     { name: "GET /api/workspaces/:id/summary", path: "/api/workspaces/org_bench_main/summary", ...standard },
     { name: "GET /api/projects/:id/tasks (page 1)", path: `/api/projects/${project.id}/tasks?limit=50`, ...standard },

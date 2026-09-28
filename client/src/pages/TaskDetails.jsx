@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getProjectProgress } from "../utils/projectProgress";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useSearchParams } from "react-router-dom";
@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import api from "../configs/api";
 import { CalendarIcon, FileIcon, MessageCircle, PenIcon, UserCircle2 } from "lucide-react";
-import { useSelector } from "react-redux";
+import { authHeaders } from "../features/workspaceSlice";
 
 const TaskDetails = () => {
     const [searchParams] = useSearchParams();
@@ -21,32 +21,74 @@ const TaskDetails = () => {
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(true);
 
-    const { currentWorkspace } = useSelector((state) => state.workspace);
+    const [nextCursor, setNextCursor] = useState(null);
+    const endCursor = useRef(null);
 
-    const fetchComments = async () => {
-        if (!taskId) return;
+    const appendComments = (incoming) =>
+        setComments((prev) => {
+            const known = new Set(prev.map((comment) => comment.id));
+            return [...prev, ...incoming.filter((comment) => !known.has(comment.id))];
+        });
+
+    const fetchCommentPage = useCallback(
+        async (cursor) => {
+            const { data } = await api.get(`/api/tasks/${taskId}/comments`, { ...(await authHeaders(getToken)), params: cursor ? { cursor } : {} });
+            if (data.endCursor) endCursor.current = data.endCursor;
+            return data;
+        },
+        [taskId, getToken]
+    );
+
+    useEffect(() => {
+        if (!projectId || !taskId) return;
+        let cancelled = false;
+        setLoading(true);
+        (async () => {
+            try {
+                const config = await authHeaders(getToken);
+                const [taskRes, projectRes, commentPage] = await Promise.all([
+                    api.get(`/api/tasks/${taskId}`, config),
+                    api.get(`/api/projects/${projectId}`, config),
+                    fetchCommentPage(),
+                ]);
+                if (cancelled) return;
+                setTask(taskRes.data.task);
+                setProject(projectRes.data.project);
+                setComments(commentPage.comments);
+                setNextCursor(commentPage.nextCursor);
+            } catch (error) {
+                if (!cancelled) toast.error(error?.response?.data?.message || error.message);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, taskId, getToken, fetchCommentPage]);
+
+    // Poll only for comments newer than the last one shown (replaced by live updates in Phase 5)
+    useEffect(() => {
+        if (!task || nextCursor) return;
+        const interval = setInterval(async () => {
+            try {
+                const { comments: newer } = await fetchCommentPage(endCursor.current);
+                if (newer.length) appendComments(newer);
+            } catch {
+                // a failed poll is retried on the next tick
+            }
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [task, nextCursor, fetchCommentPage]);
+
+    const loadMoreComments = async () => {
         try {
-            const token = await getToken();
-            const { data } = await api.get(`/api/comments/${taskId}`, { headers: { Authorization: `Bearer ${token}` } });
-            setComments(data.comments || []);
+            const data = await fetchCommentPage(nextCursor);
+            appendComments(data.comments);
+            setNextCursor(data.nextCursor);
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message);
         }
-    };
-
-    const fetchTaskDetails = async () => {
-        setLoading(true);
-        if (!projectId || !taskId) return;
-
-        const proj = currentWorkspace.projects.find((p) => p.id === projectId);
-        if (!proj) return;
-
-        const tsk = proj.tasks.find((t) => t.id === taskId);
-        if (!tsk) return;
-
-        setTask(tsk);
-        setProject(proj);
-        setLoading(false);
     };
 
     const handleAddComment = async () => {
@@ -61,7 +103,7 @@ const TaskDetails = () => {
                 { taskId: task.id, content: newComment },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setComments((prev) => [...prev, data.comment]);
+            appendComments([data.comment]);
             setNewComment("");
             toast.dismissAll();
             toast.success("Comment added.");
@@ -71,16 +113,6 @@ const TaskDetails = () => {
             console.error(error);
         }
     };
-
-    useEffect(() => { fetchTaskDetails(); }, [taskId]);
-
-    useEffect(() => {
-        if (taskId && task) {
-            fetchComments();
-            const interval = setInterval(() => { fetchComments(); }, 10000);
-            return () => clearInterval(interval);
-        }
-    }, [taskId, task]);
 
     if (loading) return <div className="text-gray-500 dark:text-zinc-400 px-4 py-6">Loading task details...</div>;
     if (!task) return <div className="text-red-500 px-4 py-6">Task not found.</div>;
@@ -109,6 +141,11 @@ const TaskDetails = () => {
                                         <p className="text-sm text-gray-900 dark:text-zinc-200">{comment.content}</p>
                                     </div>
                                 ))}
+                                {nextCursor && (
+                                    <button type="button" onClick={loadMoreComments} className="self-center text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                                        Load more comments
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <p className="text-gray-600 dark:text-zinc-500 mb-4 text-sm">No comments yet. Be the first!</p>
@@ -173,11 +210,11 @@ const TaskDetails = () => {
                     <div className="p-4 rounded-md bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 border border-gray-300 dark:border-zinc-800 ">
                         <p className="text-xl font-medium mb-4">Project Details</p>
                         <h2 className="text-gray-900 dark:text-zinc-100 flex items-center gap-2"> <PenIcon className="size-4" /> {project.name}</h2>
-                        <p className="text-xs mt-3">Project Start Date: {format(new Date(project.startDate), "dd MMM yyyy")}</p>
+                        <p className="text-xs mt-3">Project Start Date: {project.startDate ? format(new Date(project.startDate), "dd MMM yyyy") : "Not set"}</p>
                         <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-zinc-400 mt-3">
                             <span>Status: {project.status}</span>
                             <span>Priority: {project.priority}</span>
-                            <span>Progress: {getProjectProgress(project.tasks)}%</span>
+                            <span>Progress: {getProjectProgress(project.taskCounts)}%</span>
                         </div>
                     </div>
                 )}

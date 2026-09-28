@@ -32,9 +32,11 @@ export const after = (cursor: Keyset | undefined, direction: "asc" | "desc") => 
 
 export const orderBy = (direction: "asc" | "desc") => [{ createdAt: direction }, { id: direction }];
 
-// Fetch limit + 1 rows: the extra one tells whether another page exists
+// Fetch limit + 1 rows: the extra one tells whether another page exists.
+// endCursor points at the last returned item even on the final page, so a client can later ask for anything newer
 export const toPage = <T extends Keyset>(rows: T[], limit: number) => {
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
-    return { items, nextCursor: hasMore ? encodeCursor(items[items.length - 1]!) : null };
+    const last = items[items.length - 1];
+    return { items, nextCursor: hasMore && last ? encodeCursor(last) : null, endCursor: last ? encodeCursor(last) : null };
 };

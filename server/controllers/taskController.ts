@@ -32,6 +32,6 @@ export const getTask = async (req: Request, res: Response) => {
 export const getTaskCommentsPage = async (req: Request, res: Response) => {
     const { id } = parse(taskParamsSchema, req.params);
     const query = parse(commentListQuerySchema, req.query);
-    const { items, nextCursor } = await commentService.listPage(getUserId(req), id, query);
-    return res.json({ comments: items, nextCursor });
+    const { items, nextCursor, endCursor } = await commentService.listPage(getUserId(req), id, query);
+    return res.json({ comments: items, nextCursor, endCursor });
 };

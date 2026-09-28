@@ -1,16 +1,13 @@
 import { format } from "date-fns";
-import { useDispatch } from "react-redux";
 import { Plus, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { fetchWorkspaces } from "../features/workspaceSlice";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import AddProjectMember from "./AddProjectMember";
 
-export default function ProjectSettings({ project }) {
+export default function ProjectSettings({ project, onChanged }) {
     
-    const dispatch = useDispatch();
     const { getToken } = useAuth();
 
     const [formData, setFormData] = useState({
@@ -32,7 +29,7 @@ export default function ProjectSettings({ project }) {
         try {
             const { data } = await api.put(`/api/projects`, formData, { headers: { Authorization: `Bearer ${await getToken()}` } });
             setIsDialogOpen(false);
-            dispatch(fetchWorkspaces({ getToken }));
+            onChanged?.();
             toast.dismissAll();
             toast.success(data.message);
         } catch (error) {
@@ -98,11 +95,11 @@ export default function ProjectSettings({ project }) {
                     <div className="space-y-4 grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className={labelClasses}>Start Date</label>
-                            <input type="date" value={format(formData.startDate, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, startDate: new Date(e.target.value) })} className={inputClasses} />
+                            <input type="date" value={formData.startDate ? format(formData.startDate, "yyyy-MM-dd") : ""} onChange={(e) => setFormData({ ...formData, startDate: new Date(e.target.value) })} className={inputClasses} />
                         </div>
                         <div className="space-y-2">
                             <label className={labelClasses}>End Date</label>
-                            <input type="date" value={format(formData.endDate, "yyyy-MM-dd")} onChange={(e) => setFormData({ ...formData, endDate: new Date(e.target.value) })} className={inputClasses} />
+                            <input type="date" value={formData.endDate ? format(formData.endDate, "yyyy-MM-dd") : ""} onChange={(e) => setFormData({ ...formData, endDate: new Date(e.target.value) })} className={inputClasses} />
                         </div>
                     </div>
 
@@ -123,7 +120,7 @@ export default function ProjectSettings({ project }) {
                         <button type="button" onClick={() => setIsDialogOpen(true)} className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800" >
                             <Plus className="size-4 text-zinc-900 dark:text-zinc-300" />
                         </button>
-                        <AddProjectMember isDialogOpen={isDialogOpen} setIsDialogOpen={setIsDialogOpen} />
+                        <AddProjectMember isDialogOpen={isDialogOpen} setIsDialogOpen={setIsDialogOpen} project={project} onAdded={onChanged} />
                     </div>
 
                     {/* Member List */}

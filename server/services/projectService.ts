@@ -1,7 +1,7 @@
 import prisma from "../configs/prisma.js";
 import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
-import type { TaskListQuery } from "../schemas/query.js";
+import type { CalendarQuery, TaskListQuery } from "../schemas/query.js";
 import { after, orderBy, toPage } from "../utils/pagination.js";
 import { requireProjectAccess, requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
 import { taskCountsByProject } from "./taskCounts.js";
@@ -107,4 +107,58 @@ export const listTasks = async (userId: string, projectId: string, query: TaskLi
         take: limit + 1,
     });
     return toPage(rows, limit);
+};
+
+const tally = <K extends string>(keys: readonly K[], rows: { key: string; count: number }[]) =>
+    Object.fromEntries(keys.map((key) => [key, rows.find((row) => row.key === key)?.count ?? 0])) as Record<K, number>;
+
+export const stats = async (userId: string, projectId: string) => {
+    await requireProjectAccess(projectId, userId);
+    const where = { projectId };
+    const [byStatus, byType, byPriority, overdue] = await Promise.all([
+        prisma.task.groupBy({ by: ["status"], where, _count: { _all: true } }),
+        prisma.task.groupBy({ by: ["type"], where, _count: { _all: true } }),
+        prisma.task.groupBy({ by: ["priority"], where, _count: { _all: true } }),
+        prisma.task.count({ where: { ...where, status: { not: "DONE" }, dueDate: { lt: new Date() } } }),
+    ]);
+    const status = tally(["TODO", "IN_PROGRESS", "DONE"], byStatus.map((row) => ({ key: row.status, count: row._count._all })));
+    return {
+        total: status.TODO + status.IN_PROGRESS + status.DONE,
+        todo: status.TODO,
+        inProgress: status.IN_PROGRESS,
+        done: status.DONE,
+        overdue,
+        byType: tally(["TASK", "BUG", "FEATURE", "IMPROVEMENT", "OTHER"], byType.map((row) => ({ key: row.type, count: row._count._all }))),
+        byPriority: tally(["LOW", "MEDIUM", "HIGH"], byPriority.map((row) => ({ key: row.priority, count: row._count._all }))),
+    };
+};
+
+const CALENDAR_LIMIT = 500;
+const calendarTaskFields = { include: { assignee: { select: { id: true, name: true, image: true } } } } as const;
+
+export const calendar = async (userId: string, projectId: string, { from, to }: CalendarQuery) => {
+    await requireProjectAccess(projectId, userId);
+    const endOfTo = new Date(to.getTime() + 86_400_000);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const open = { projectId, status: { not: "DONE" as const } };
+
+    const [inWindow, upcoming, overdueCount, overdueTasks] = await Promise.all([
+        prisma.task.findMany({
+            where: { projectId, dueDate: { gte: from, lt: endOfTo } },
+            orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+            take: CALENDAR_LIMIT + 1,
+            ...calendarTaskFields,
+        }),
+        prisma.task.findMany({ where: { ...open, dueDate: { gte: startOfToday } }, orderBy: { dueDate: "asc" }, take: 5, ...calendarTaskFields }),
+        prisma.task.count({ where: { ...open, dueDate: { lt: now } } }),
+        prisma.task.findMany({ where: { ...open, dueDate: { lt: now } }, orderBy: { dueDate: "asc" }, take: 10, ...calendarTaskFields }),
+    ]);
+
+    return {
+        tasks: inWindow.slice(0, CALENDAR_LIMIT),
+        truncated: inWindow.length > CALENDAR_LIMIT,
+        upcoming,
+        overdue: { count: overdueCount, tasks: overdueTasks },
+    };
 };

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { getUserId } from "../middlewares/authMiddleware.js";
 import { addMemberSchema, createProjectSchema, projectParamsSchema, updateProjectSchema } from "../schemas/project.js";
-import { taskListQuerySchema } from "../schemas/query.js";
+import { calendarQuerySchema, taskListQuerySchema } from "../schemas/query.js";
 import * as projectService from "../services/projectService.js";
 import { parse } from "../utils/validation.js";
 
@@ -32,4 +32,15 @@ export const getProjectTasks = async (req: Request, res: Response) => {
     const query = parse(taskListQuerySchema, req.query);
     const { items, nextCursor } = await projectService.listTasks(getUserId(req), projectId, query);
     return res.json({ tasks: items, nextCursor });
+};
+
+export const getProjectStats = async (req: Request, res: Response) => {
+    const { projectId } = parse(projectParamsSchema, req.params);
+    return res.json({ stats: await projectService.stats(getUserId(req), projectId) });
+};
+
+export const getProjectCalendar = async (req: Request, res: Response) => {
+    const { projectId } = parse(projectParamsSchema, req.params);
+    const query = parse(calendarQuerySchema, req.query);
+    return res.json(await projectService.calendar(getUserId(req), projectId, query));
 };

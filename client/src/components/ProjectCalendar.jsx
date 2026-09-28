@@ -1,4 +1,8 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
+import toast from "react-hot-toast";
+import api from "../configs/api";
+import { authHeaders } from "../features/workspaceSlice";
 import { format, isSameDay, isBefore, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns";
 import { CalendarIcon, Clock, User, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -16,19 +20,30 @@ const priorityBorders = {
     HIGH: "border-orange-300 dark:border-orange-500",
 };
 
-const ProjectCalendar = ({ tasks }) => {
+const ProjectCalendar = ({ projectId, reloadKey }) => {
+    const { getToken } = useAuth();
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [calendar, setCalendar] = useState({ tasks: [], upcoming: [], overdue: { count: 0, tasks: [] } });
+
+    useEffect(() => {
+        let cancelled = false;
+        const params = { from: format(startOfMonth(currentMonth), "yyyy-MM-dd"), to: format(endOfMonth(currentMonth), "yyyy-MM-dd") };
+        authHeaders(getToken)
+            .then((config) => api.get(`/api/projects/${projectId}/calendar`, { ...config, params }))
+            .then(({ data }) => !cancelled && setCalendar(data))
+            .catch((error) => toast.error(error?.response?.data?.message || error.message));
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, currentMonth, reloadKey, getToken]);
 
     const today = new Date();
+    const tasks = calendar.tasks;
     const getTasksForDate = (date) => tasks.filter((task) => isSameDay(task.dueDate, date));
-
-    const upcomingTasks = tasks
-        .filter((task) => task.dueDate && !isBefore(task.dueDate, today) && task.status !== "DONE")
-        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-        .slice(0, 5);
-
-    const overdueTasks = tasks.filter((task) => task.dueDate && isBefore(task.dueDate, today) && task.status !== "DONE");
+    const upcomingTasks = calendar.upcoming;
+    const overdueTasks = calendar.overdue.tasks;
+    const overdueCount = calendar.overdue.count;
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(currentMonth),
@@ -155,10 +170,10 @@ const ProjectCalendar = ({ tasks }) => {
                 </div>
 
                 {/* Overdue Tasks */}
-                {overdueTasks.length > 0 && (
+                {overdueCount > 0 && (
                     <div className="bg-white dark:bg-zinc-950  border border-red-300 dark:border-red-500 border-l-4 rounded-lg p-4">
                         <h3 className="text-red-700 dark:text-red-400 text-sm flex items-center gap-2 mb-3">
-                            <Clock className="w-4 h-4" /> Overdue Tasks ({overdueTasks.length})
+                            <Clock className="w-4 h-4" /> Overdue Tasks ({overdueCount})
                         </h3>
                         <div className="space-y-2">
                             {overdueTasks.slice(0, 5).map((task) => (
@@ -174,9 +189,9 @@ const ProjectCalendar = ({ tasks }) => {
                                     </p>
                                 </div>
                             ))}
-                            {overdueTasks.length > 5 && (
+                            {overdueCount > 5 && (
                                 <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
-                                    +{overdueTasks.length - 5} more
+                                    +{overdueCount - 5} more
                                 </p>
                             )}
                         </div>

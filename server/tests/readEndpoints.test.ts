@@ -211,3 +211,20 @@ describe("GET /api/tasks/:taskId/comments (cursor pagination)", () => {
         expect((await as(outsider.id).get(`/api/tasks/${task.id}/comments`)).status).toBe(403);
     });
 });
+
+describe("comment polling with endCursor", () => {
+    it("returns only comments newer than the last one the client has", async () => {
+        const { member, project } = await createTeam();
+        const task = await createTask(project.id);
+        await createComment(task.id, member.id, "First", { createdAt: new Date(Date.UTC(2026, 0, 1)) });
+
+        const first = await as(member.id).get(`/api/tasks/${task.id}/comments`);
+        expect(first.body.nextCursor).toBeNull();
+        expect(first.body.endCursor).toBeTruthy();
+
+        await createComment(task.id, member.id, "Second", { createdAt: new Date(Date.UTC(2026, 0, 2)) });
+        const poll = await as(member.id).get(`/api/tasks/${task.id}/comments?cursor=${first.body.endCursor}`);
+
+        expect(poll.body.comments.map((c: { content: string }) => c.content)).toEqual(["Second"]);
+    });
+});
