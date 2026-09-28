@@ -1,0 +1,62 @@
+[
+  {
+    "operation": "tasks of a project, page 1",
+    "plan": "Index Scan Backward (\"Task_projectId_createdAt_id_idx\") on Task",
+    "ms": 0.111
+  },
+  {
+    "operation": "tasks of a project, after row 2,000 (Prisma cursor)",
+    "plan": "Index Scan (\"Task_pkey\") on Task, Index Only Scan (\"Task_pkey\") on Task, Index Scan Backward (\"Task_projectId_createdAt_id_idx\") on Task",
+    "ms": 1.187
+  },
+  {
+    "operation": "tasks of a project, after row 2,000 (keyset)",
+    "plan": "Index Scan Backward (\"Task_projectId_createdAt_id_idx\") on Task",
+    "ms": 0.119
+  },
+  {
+    "operation": "tasks of a project, assignee = me",
+    "plan": "Bitmap Heap Scan on Task, Bitmap Index Scan on Task_assigneeId_due_date_idx, Bitmap Index Scan on Task_projectId_status_idx",
+    "ms": 0.543
+  },
+  {
+    "operation": "comments of a task, page 1",
+    "plan": "Bitmap Heap Scan on Comment, Bitmap Index Scan on Comment_taskId_createdAt_id_idx",
+    "ms": 0.075
+  },
+  {
+    "operation": "project members by project (access checks, includes)",
+    "plan": "Bitmap Heap Scan on ProjectMember, Bitmap Index Scan on ProjectMember_projectId_idx",
+    "ms": 0.064
+  },
+  {
+    "operation": "projects visible to a member",
+    "plan": "Index Scan (\"Project_workspaceId_idx\") on Project, Bitmap Heap Scan on ProjectMember, Bitmap Index Scan on ProjectMember_userId_projectId_key",
+    "ms": 0.116
+  },
+  {
+    "operation": "task counts per project (GROUP BY)",
+    "plan": "Index Only Scan (\"Task_projectId_status_idx\") on Task",
+    "ms": 5.504
+  },
+  {
+    "operation": "summary: overdue count",
+    "plan": "Seq Scan on Task",
+    "ms": 9.324
+  },
+  {
+    "operation": "summary: my open tasks (count)",
+    "plan": "Bitmap Heap Scan on Task, Bitmap Index Scan on Task_assigneeId_due_date_idx",
+    "ms": 0.681
+  },
+  {
+    "operation": "summary: my open tasks (top 10 by due date)",
+    "plan": "Index Scan (\"Task_assigneeId_due_date_idx\") on Task",
+    "ms": 0.074
+  },
+  {
+    "operation": "summary: recently updated (top 10)",
+    "plan": "Index Scan Backward (\"Task_updatedAt_idx\") on Task",
+    "ms": 0.605
+  }
+]

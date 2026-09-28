@@ -2,7 +2,7 @@ import prisma from "../configs/prisma.js";
 import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
 import type { TaskListQuery } from "../schemas/query.js";
-import { pageArgs, toPage } from "../utils/pagination.js";
+import { after, orderBy, toPage } from "../utils/pagination.js";
 import { requireProjectAccess, requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
 import { taskCountsByProject } from "./taskCounts.js";
 
@@ -97,14 +97,14 @@ export const get = async (userId: string, projectId: string) => {
 
 export const listTasks = async (userId: string, projectId: string, query: TaskListQuery) => {
     await requireProjectAccess(projectId, userId);
-    const { status, type, priority, assignee, limit } = query;
+    const { status, type, priority, assignee, cursor, limit } = query;
     const assigneeId = assignee === "me" ? userId : assignee === "none" ? null : assignee;
 
     const rows = await prisma.task.findMany({
-        where: { projectId, status, type, priority, ...(assignee !== undefined ? { assigneeId } : {}) },
+        where: { projectId, status, type, priority, ...(assignee !== undefined ? { assigneeId } : {}), ...after(cursor, "desc") },
         include: { assignee: true },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        ...pageArgs(query),
+        orderBy: orderBy("desc"),
+        take: limit + 1,
     });
     return toPage(rows, limit);
 };

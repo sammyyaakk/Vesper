@@ -15,7 +15,8 @@
     "db:test": "docker compose -f ../compose.test.yaml up -d --wait",
     "bench:db": "docker compose -f ../compose.bench.yaml up -d --wait",
     "bench:seed": "tsx scripts/bench/seed.ts",
-    "bench": "tsx scripts/bench/run.ts"
+    "bench": "tsx scripts/bench/run.ts",
+    "bench:explain": "tsx scripts/bench/explain.ts"
   },
   "keywords": [],
   "author": "",

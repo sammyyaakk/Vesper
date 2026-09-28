@@ -113,6 +113,26 @@ describe("GET /api/projects/:projectId/tasks (cursor pagination)", () => {
         expect(second.body.nextCursor).toBeNull();
     });
 
+    it("pages correctly through tasks created in the same millisecond", async () => {
+        const { member, project } = await createTeam();
+        const sameInstant = new Date(Date.UTC(2026, 0, 1));
+        const ids = [];
+        for (let i = 0; i < 5; i++) ids.push((await createTask(project.id, { createdAt: sameInstant })).id);
+
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        let pages = 0;
+        do {
+            const res = await as(member.id).get(`/api/projects/${project.id}/tasks?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+            seen.push(...res.body.tasks.map((t: { id: string }) => t.id));
+            cursor = res.body.nextCursor;
+            pages++;
+        } while (cursor && pages < 10);
+
+        expect(seen).toHaveLength(5);
+        expect(new Set(seen)).toEqual(new Set(ids));
+    });
+
     it("filters on the server by status and assignee", async () => {
         const { member, lead, project } = await createTeam();
         await createTask(project.id, { status: "DONE", assigneeId: member.id });

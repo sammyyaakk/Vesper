@@ -1,9 +1,10 @@
 import { Priority, TaskStatus, TaskType } from "@prisma/client";
 import { z } from "zod";
-import { clerkId, uuid } from "./common.js";
+import { cursorSchema } from "../utils/pagination.js";
+import { clerkId } from "./common.js";
 
 const page = {
-    cursor: uuid.optional(),
+    cursor: cursorSchema.optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
 };
 

@@ -1,7 +1,7 @@
 import prisma from "../configs/prisma.js";
 import type { AddCommentInput } from "../schemas/comment.js";
 import type { PageQuery } from "../schemas/query.js";
-import { pageArgs, toPage } from "../utils/pagination.js";
+import { after, orderBy, toPage } from "../utils/pagination.js";
 import { requireTaskAccess } from "./authorization.js";
 
 export const add = async (userId: string, { taskId, content }: AddCommentInput) => {
@@ -17,10 +17,10 @@ export const listForTask = async (userId: string, taskId: string) => {
 export const listPage = async (userId: string, taskId: string, query: PageQuery) => {
     await requireTaskAccess(taskId, userId);
     const rows = await prisma.comment.findMany({
-        where: { taskId },
+        where: { taskId, ...after(query.cursor, "asc") },
         include: { user: true },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        ...pageArgs(query),
+        orderBy: orderBy("asc"),
+        take: query.limit + 1,
     });
     return toPage(rows, query.limit);
 };

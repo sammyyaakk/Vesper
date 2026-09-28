@@ -32,8 +32,9 @@ const deepCursor = await prisma.task.findFirstOrThrow({
     where: { projectId: project.id },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     skip: 1999,
-    select: { id: true },
+    select: { id: true, createdAt: true },
 });
+const { encodeCursor } = await import("../../utils/pagination.js");
 const dataset = {
     tasks: await prisma.task.count(),
     comments: await prisma.comment.count(),
@@ -49,7 +50,7 @@ const scenarios: Scenario[] = [
     { name: "GET /api/workspaces/:id/projects", path: "/api/workspaces/org_bench_main/projects", ...standard },
     { name: "GET /api/workspaces/:id/summary", path: "/api/workspaces/org_bench_main/summary", ...standard },
     { name: "GET /api/projects/:id/tasks (page 1)", path: `/api/projects/${project.id}/tasks?limit=50`, ...standard },
-    { name: "GET /api/projects/:id/tasks (after row 2,000)", path: `/api/projects/${project.id}/tasks?limit=50&cursor=${deepCursor.id}`, ...standard },
+    { name: "GET /api/projects/:id/tasks (after row 2,000)", path: `/api/projects/${project.id}/tasks?limit=50&cursor=${encodeCursor(deepCursor)}`, ...standard },
     { name: "GET /api/projects/:id/tasks?assignee=me", path: `/api/projects/${project.id}/tasks?limit=50&assignee=me`, ...standard },
     { name: "GET /api/tasks/:id/comments", path: `/api/tasks/${task.id}/comments?limit=50`, ...standard },
 ];
