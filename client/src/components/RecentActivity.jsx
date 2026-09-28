@@ -1,6 +1,7 @@
 import { GitCommit, MessageSquare, Clock, Bug, Zap, Square } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 
 const typeIcons = {
     BUG: { icon: Bug, color: "text-red-500 dark:text-red-400" },
@@ -40,7 +41,7 @@ const RecentActivity = () => {
                             const iconColor = typeIcons[task.type]?.color || "text-gray-500 dark:text-gray-400";
 
                             return (
-                                <div key={task.id} className="p-6 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                                <Link key={task.id} to={`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`} className="block p-6 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
                                     <div className="flex items-start gap-4">
                                         <div className="p-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg">
                                             <TypeIcon className={`w-4 h-4 ${iconColor}`} />
@@ -70,7 +71,7 @@ const RecentActivity = () => {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </Link>
                             );
                         })}
                     </div>

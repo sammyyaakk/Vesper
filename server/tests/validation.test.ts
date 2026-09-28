@@ -149,3 +149,43 @@ describe("PUT /api/projects validation", () => {
         expect(res.status).toBe(400);
     });
 });
+
+describe("PUT /api/tasks/:id editing", () => {
+    it("lets a manager edit every detail in one request", async () => {
+        const { lead, member, project } = await createTeam();
+        const task = await createTask(project.id, { title: "Old", description: "Old notes" });
+
+        const res = await as(lead.id)
+            .put(`/api/tasks/${task.id}`)
+            .send({ title: "New", description: "New notes", type: "BUG", priority: "HIGH", status: "IN_PROGRESS", assigneeId: member.id, dueDate: inAWeek() });
+
+        expect(res.status).toBe(200);
+        expect(await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({
+            title: "New",
+            description: "New notes",
+            type: "BUG",
+            priority: "HIGH",
+            status: "IN_PROGRESS",
+            assigneeId: member.id,
+        });
+    });
+
+    it("clears the description when it's sent empty", async () => {
+        const { lead, project } = await createTeam();
+        const task = await createTask(project.id, { description: "Remove me" });
+
+        const res = await as(lead.id).put(`/api/tasks/${task.id}`).send({ description: "" });
+
+        expect(res.status).toBe(200);
+        expect((await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).description).toBeNull();
+    });
+
+    it("leaves the description alone when it's omitted", async () => {
+        const { lead, project } = await createTeam();
+        const task = await createTask(project.id, { description: "Keep me" });
+
+        await as(lead.id).put(`/api/tasks/${task.id}`).send({ title: "Renamed" });
+
+        expect((await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).description).toBe("Keep me");
+    });
+});

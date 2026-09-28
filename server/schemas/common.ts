@@ -9,6 +9,12 @@ export const clerkId = z.string().trim().min(1).max(100);
 
 export const optionalText = z.preprocess(blankToUndefined, z.string().trim().max(5000).optional());
 
+// For updates: omitted leaves the field unchanged, blank clears it
+export const clearableText = z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().max(5000).nullish(),
+);
+
 export const optionalDate = z.preprocess(blankToUndefined, z.coerce.date("Must be a valid date").optional());
 
 export const requiredDate = z.preprocess(

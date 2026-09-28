@@ -8,6 +8,8 @@ import { authHeaders } from "../features/workspaceSlice";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import TaskActionsMenu from "./TaskActionsMenu";
+import TaskFormDialog from "./TaskFormDialog";
+import { canManageProject } from "../utils/permissions";
 
 const typeIcons = {
     BUG: { icon: Bug, color: "text-red-600 dark:text-red-400" },
@@ -43,7 +45,11 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
 
-    const members = useSelector((state) => state.workspace.projects.find((p) => p.id === projectId)?.members ?? []);
+    const project = useSelector((state) => state.workspace.projects.find((p) => p.id === projectId));
+    const workspaceRole = useSelector((state) => state.workspace.currentWorkspace?.role);
+    const members = project?.members ?? [];
+    const canManage = canManageProject(project, user?.id, workspaceRole);
+    const [editingTask, setEditingTask] = useState(null);
 
     // Filters run on the server; only non-empty ones are sent
     const fetchPage = useCallback(
@@ -129,6 +135,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
 
     const actionsFor = (task) => ({
         onOpen: () => openTask(task),
+        onEdit: canManage ? () => setEditingTask(task) : undefined,
         onDelete: () => handleDelete([task.id]),
         onClaim: !task.assigneeId && user ? () => handleAssign(task, user.id) : undefined,
         onUnassign: user && task.assigneeId === user.id ? () => handleAssign(task, null) : undefined,
@@ -424,6 +431,18 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
                     </div>
                 </div>
             </div>
+
+            {editingTask && (
+                <TaskFormDialog
+                    project={project}
+                    task={editingTask}
+                    onClose={() => setEditingTask(null)}
+                    onSaved={(updated) => {
+                        replaceTask(updated);
+                        onChanged?.();
+                    }}
+                />
+            )}
 
             {nextCursor && (
                 <div className="flex justify-center mt-4">
