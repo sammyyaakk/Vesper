@@ -4,6 +4,7 @@ import prisma from "../configs/prisma.js";
 import sendEmail from "../configs/nodemailer.js";
 import { assignmentEmail, reminderEmail } from "../emails/taskEmails.js";
 import { removeUser } from "../services/userService.js";
+import { invalidateWorkspace } from "../services/workspaceCache.js";
 import type { inngest } from "./index.js";
 
 export type Step = Pick<GetStepTools<typeof inngest>, "run" | "sleepUntil">;
@@ -19,6 +20,10 @@ interface ClerkUserData {
 const displayName = ({ first_name, last_name, email_addresses }: ClerkUserData) =>
     [first_name, last_name].filter(Boolean).join(" ") || email_addresses?.[0]?.email_address.split("@")[0] || "User";
 
+// Names and avatars show up in every workspace the user belongs to
+const workspaceIdsOf = async (userId: string) =>
+    (await prisma.workspaceMember.findMany({ where: { userId }, select: { workspaceId: true } })).map((m) => m.workspaceId);
+
 // Custom Clerk roles get the least privilege
 const toWorkspaceRole = (clerkRole?: string): WorkspaceRole => (clerkRole === "org:admin" ? "ADMIN" : "MEMBER");
 
@@ -31,10 +36,13 @@ export const handleUserCreation = async (event: { data?: EventData }) => {
         image: data?.image_url ?? "",
     };
     await prisma.user.upsert({ where: { id: data.id }, create: { id: data.id, ...fields }, update: fields });
+    await invalidateWorkspace(...(await workspaceIdsOf(data.id)));
 };
 
 export const handleUserDeletion = async (event: { data?: EventData }) => {
+    const workspaceIds = await workspaceIdsOf(event.data.id);
     await removeUser(event.data.id);
+    await invalidateWorkspace(...workspaceIds);
 };
 
 export const handleUserUpdation = async (event: { data?: EventData }) => {
@@ -49,6 +57,7 @@ export const handleUserUpdation = async (event: { data?: EventData }) => {
             image: data?.image_url,
         },
     });
+    await invalidateWorkspace(...(await workspaceIdsOf(data.id)));
 };
 
 export const handleWorkspaceCreation = async (event: { data?: EventData }) => {
@@ -64,6 +73,7 @@ export const handleWorkspaceCreation = async (event: { data?: EventData }) => {
         create: { userId: data.created_by, workspaceId: data.id, role: "ADMIN" },
         update: { role: "ADMIN" },
     });
+    await invalidateWorkspace(data.id);
 };
 
 export const handleWorkspaceUpdation = async (event: { data?: EventData }) => {
@@ -78,6 +88,7 @@ export const handleWorkspaceUpdation = async (event: { data?: EventData }) => {
             imageUrl: data.image_url,
         },
     });
+    await invalidateWorkspace(data.id);
 };
 
 export const handleWorkspaceDeletion = async (event: { data?: EventData }) => {
@@ -87,6 +98,7 @@ export const handleWorkspaceDeletion = async (event: { data?: EventData }) => {
             id: data.id,
         },
     });
+    await invalidateWorkspace(data.id);
 };
 
 export const handleWorkspaceMemberCreation = async (event: { data?: EventData }) => {
@@ -97,6 +109,7 @@ export const handleWorkspaceMemberCreation = async (event: { data?: EventData })
         create: { userId: data.user_id, workspaceId: data.organization_id, role },
         update: { role },
     });
+    await invalidateWorkspace(data.organization_id);
 };
 
 const loadTaskForEmail = (taskId: string) =>

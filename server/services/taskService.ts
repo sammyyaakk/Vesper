@@ -11,6 +11,7 @@ import {
     requireProjectManager,
     requireTaskAccess,
 } from "./authorization.js";
+import { invalidateWorkspace } from "./workspaceCache.js";
 
 type TaskEvent =
     | { name: "app/task.assigned"; data: { taskId: string; assigneeId: string } }
@@ -58,6 +59,8 @@ export const create = async (userId: string, input: CreateTaskInput) => {
         },
     });
 
+    await invalidateWorkspace(project.workspaceId);
+
     const taskWithAssignee = await prisma.task.findUnique({
         where: { id: task.id },
         include: { assignee: true },
@@ -83,6 +86,7 @@ export const update = async (userId: string, taskId: string, changes: UpdateTask
         data: { title, description, type, status, priority, assigneeId, dueDate },
         include: { assignee: true },
     });
+    await invalidateWorkspace(project.workspaceId);
 
     const events: TaskEvent[] = [];
     if (dueDate && dueDate.getTime() !== task.dueDate.getTime()) events.push(dueDateSet(taskId, dueDate));
@@ -99,11 +103,13 @@ export const remove = async (userId: string, taskIds: string[]) => {
     const tasks = await prisma.task.findMany({ where: { id: { in: ids } }, select: { projectId: true } });
     if (tasks.length !== ids.length) throw AppError.notFound("Task not found");
 
+    const workspaceIds: string[] = [];
     for (const projectId of new Set(tasks.map((task) => task.projectId))) {
-        await requireProjectManager(projectId, userId);
+        workspaceIds.push((await requireProjectManager(projectId, userId)).workspaceId);
     }
 
     await prisma.task.deleteMany({ where: { id: { in: ids } } });
+    await invalidateWorkspace(...workspaceIds);
     await publish(ids.map((taskId) => ({ name: "app/task.deleted", data: { taskId } })));
 };
 
