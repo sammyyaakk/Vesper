@@ -2,6 +2,25 @@
 
 Each phase lists what changed and why.
 
+## Phase 6: Docker, CI and deployment
+
+### Docker
+- Multi-stage `server/Dockerfile`: compile in a build stage, install production dependencies only, run as the non-root `node` user with a health check. Dependency install scripts don't run; Prisma client generation runs explicitly. `.dockerignore` keeps `.env`, tests and benchmark results out.
+- Runtime image 783 → 628 MB by also omitting optional peer dependencies (TypeScript and the Prisma CLI were being installed as peers of production packages).
+- `compose.yaml`: Postgres, Redis, a one-off migration job, the API and the Inngest dev server with one command; the API starts only after migrations succeed.
+- Each compose file has its own project name. They all sat in one directory, so they shared a project and replaced each other's containers.
+- Removed the unused `multer` dependency and the stale `server/vercel.json` (serverless config pointing at a file that no longer exists).
+
+### CI (GitHub Actions)
+- On every pull request and push to `main`: server typecheck and all integration tests against Postgres and Redis service containers, client lint and build, and the Docker image build. Read-only token, no secrets needed, superseded runs cancelled.
+- Fixed the client's long-standing lint error: core ESLint doesn't see JSX usage of a destructured parameter (`<Icon />`), so capitalized parameters are exempt, as capitalized variables already were.
+
+### Deployment
+- `render.yaml`: the API as a Docker web service and a private Redis (Key Value), both on free plans; redeploys only for `server/` changes, and only after CI passes.
+- Migrations run in CI on `main` before Render deploys, using a secret scoped to a GitHub `production` environment (Render's pre-deploy step is paid-only).
+- `TRUST_PROXY` makes Express read the client IP behind a load balancer.
+- README: deployment guide (Vercel, Render, Neon, Inngest Cloud, Clerk) and Docker Compose instructions.
+
 ## Phase 5: Real-time updates
 
 ### Connections

@@ -16,6 +16,10 @@ import commentRouter from "./routes/commentRoutes.js";
 
 export const app = express();
 
+// Behind a load balancer, trust that many proxy hops for the client IP (rate limiting, logs); never trust X-Forwarded-For otherwise
+const proxyHops = Number(process.env.TRUST_PROXY);
+if (proxyHops > 0) app.set("trust proxy", proxyHops);
+
 const perMinute = (variable: string, fallback: number) => Number(process.env[variable]) || fallback;
 const isRead = (method: string) => method === "GET" || method === "HEAD";
 const rateLimits = [

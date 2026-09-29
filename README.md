@@ -1,8 +1,10 @@
 # Vesper
 
+[![CI](https://github.com/sammyyaakk/Vesper/actions/workflows/ci.yml/badge.svg)](https://github.com/sammyyaakk/Vesper/actions/workflows/ci.yml)
+
 Vesper is a multi-tenant project management app. Teams work inside **workspaces**, which contain **projects**, which contain **tasks** with **comments**. Members are assigned tasks, get an email when that happens, and get a reminder when a task is due.
 
-> **Status:** under active development. Done so far: a hardened TypeScript backend, performance work, Redis caching and rate limiting, and real-time updates. Next: Docker and CI. See [Roadmap](#roadmap).
+> **Status:** all six planned phases are done: a hardened TypeScript backend, performance work, Redis caching and rate limiting, real-time updates, and Docker, CI and deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -26,7 +28,8 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 | Backend | Node.js, Express 5, TypeScript (strict) |
 | Logging | [Pino](https://getpino.io) structured JSON logs with per-request IDs |
 | Validation | [Zod](https://zod.dev) schemas for every request body and URL parameter |
-| Testing | Vitest + Supertest integration tests against a disposable Postgres in Docker |
+| Testing | Vitest + Supertest integration tests against a disposable Postgres and Redis in Docker |
+| CI/CD | GitHub Actions (tests, lint, builds, migrations); Docker; Render (API) and Vercel (client) |
 | Database | PostgreSQL on [Neon](https://neon.tech), via Prisma 6 and the Neon serverless driver adapter |
 | Cache and rate limits | Redis 7 via [ioredis](https://github.com/redis/ioredis); optional (the API fails open without it) |
 | Auth | [Clerk](https://clerk.com): users, sessions, Organizations (workspaces) |
@@ -269,6 +272,48 @@ npm test
 
 The test run refuses to start unless `DATABASE_URL` points at a local database whose name ends in `_test`. Migrations are applied once per run, and every table (and the test Redis) is emptied before each test. Clerk is replaced by a test double that reads the user ID from an `x-test-user-id` header, so no production code has a test-only path.
 
+### 9. The whole backend in Docker (optional)
+
+```bash
+docker compose up --build   # from the repo root
+```
+
+This starts Postgres, Redis, a one-off migration job, the API (port 5000) and the Inngest dev server (port 8288), using the Clerk keys from `server/.env`. The API starts only after migrations succeed. Stop the local `npm run dev` API first; both use port 5000. Sync Clerk users into this database with `npm run sync:clerk` (step 7), which talks to the Inngest container.
+
+---
+
+## Deployment
+
+Everything runs on free tiers:
+
+| Part | Host | Notes |
+|---|---|---|
+| Client | [Vercel](https://vercel.com) | Static Vite build; deploys on every push |
+| API | [Render](https://render.com) web service | Docker image from `server/Dockerfile`; a long-running server, which WebSockets need |
+| Redis | Render Key Value | Private to Render's network |
+| Postgres | Neon | A separate `production` branch |
+| Background jobs | [Inngest Cloud](https://www.inngest.com) | Receives Clerk webhooks, calls the API |
+| Auth | Clerk (development instance) | Works on any domain; shows a "development mode" badge |
+
+**How a change ships:** a push to `main` runs CI. When the tests, lint and image build pass, CI applies migrations to the production database (`migrate` job, using a secret from the GitHub `production` environment). Render deploys the API only after all checks pass (`autoDeployTrigger: checksPass` in [`render.yaml`](render.yaml)), so the schema is always updated before the new code starts. Vercel deploys the client.
+
+### First-time setup
+
+1. **Neon:** in your project, create a branch named `production` from `main` (it starts with a copy of the schema and data). Copy its pooled and direct connection strings. Its region should match the Render region in `render.yaml` (Singapore; change both if your Neon project is elsewhere).
+2. **GitHub:** Settings → Environments → **New environment** `production`, restricted to the `main` branch. Add the secret `PRODUCTION_DIRECT_URL` (the branch's **direct** connection string). From then on, every push to `main` migrates the production database.
+3. **Render:** New → **Blueprint** → this repository. Render reads `render.yaml`, creates `vesper-api` and `vesper-redis`, and asks for the secrets:
+   - `DATABASE_URL`, `DIRECT_URL`: the Neon `production` branch strings (pooled, direct)
+   - `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`: the same development keys as locally
+   - `APP_URL`: the client's URL, e.g. `https://vesper.vercel.app` (exact origin, no trailing slash; it controls CORS and which origin Clerk tokens must come from)
+   - `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`: from step 5 (they can be filled in afterwards)
+   - `SENDER_EMAIL`, `SMTP_USER`, `SMTP_PASS`: Brevo SMTP (optional; without them only emails fail)
+4. **Vercel:** Add New → Project → this repository, **Root Directory `client`** (Vite is detected). Environment variables: `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_BASEURL` (the Render URL, e.g. `https://vesper-api.onrender.com`). If the final Vercel URL differs from what you put in `APP_URL`, update it on Render.
+5. **Inngest Cloud:** create an app; put its event key and signing key into Render. Then **Sync app** with `https://<your-render-url>/api/inngest`: it should find 11 functions.
+6. **Clerk → Inngest:** in Inngest, Integrations → **Clerk**, connect your Clerk application. Make sure the webhook includes `user.*`, `organization.*`, `organizationMembership.*` and `organizationInvitation.accepted`.
+7. **Check:** open the Vercel URL, sign in, and open a project in two browsers: changes should appear in both without reloading.
+
+**Free-tier behaviour:** Render's free web service sleeps after about 15 minutes without traffic; the first request after that takes up to a minute while it starts, and the live connection reconnects by itself. Inngest retries jobs that hit a sleeping API. Preview deployments on Vercel can't call the API, because CORS allows only `APP_URL`.
+
 ---
 
 ## Performance
@@ -392,6 +437,6 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 - [x] **Phase 3**: Screen-shaped endpoints replacing a 76 MB workspace payload; keyset pagination with server-side filters; seven indexes chosen from `EXPLAIN ANALYZE`; benchmarks on a 50k-task dataset (project task list: 7.2 s → 19 ms p97.5)
 - [x] **Phase 4**: Redis: per-user rate limiting (sliding-window counter in Lua); dashboard cache with versioned-key invalidation (summary 265 → 1,744 req/s); both fail open. Task editing
 - [x] **Phase 5**: Real-time task and comment updates with Socket.io: handshake auth, authorized project rooms, pushed revocation, resync after reconnect, Redis adapter for multiple instances. Fixed: Clerk membership removals weren't synced
-- [ ] **Phase 6**: Docker Compose (API + Postgres + Redis) and GitHub Actions CI
+- [x] **Phase 6**: Multi-stage Docker image (non-root, 628 MB) and a full-stack Compose file with a migration job; GitHub Actions CI (typecheck, 165 tests on real Postgres/Redis, lint, builds); free-tier deployment where migrations run before each deploy
 
 A changelog of what changed in each phase, and why, is kept in [`CHANGELOG.md`](CHANGELOG.md).
