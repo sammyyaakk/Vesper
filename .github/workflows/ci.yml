@@ -79,3 +79,39 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: docker build --tag vesper-api:ci server
+
+  # Applies migrations to the production database after every check passed on main.
+  # Render deploys only after all checks (this one included) pass, so the schema is always updated before the code.
+  migrate:
+    name: Migrate production database
+    needs: [server, client, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Secrets live in the "production" environment, available only to this job on main
+    environment: production
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+      DATABASE_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+    steps:
+      - name: Skip until the production database is configured
+        if: env.DIRECT_URL == ''
+        # Runs before checkout, when server/ doesn't exist yet
+        working-directory: .
+        run: echo "::notice::PRODUCTION_DIRECT_URL isn't set; skipping migrations"
+      - uses: actions/checkout@v5
+        if: env.DIRECT_URL != ''
+      - uses: actions/setup-node@v5
+        if: env.DIRECT_URL != ''
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - if: env.DIRECT_URL != ''
+        run: npm ci --ignore-scripts
+      - if: env.DIRECT_URL != ''
+        run: npx prisma migrate deploy
+

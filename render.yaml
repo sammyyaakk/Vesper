@@ -1,0 +1,56 @@
+# Render Blueprint: the API (Docker) and its Redis. The client is deployed separately (Vercel, root directory "client").
+# Secrets marked "sync: false" are entered in the Render dashboard when the Blueprint is created.
+services:
+  - type: web
+    name: vesper-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /
+    # Deploys after GitHub Actions passes, which includes applying migrations to the production database
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - server/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render's load balancer is one proxy hop in front of the app
+      - key: TRUST_PROXY
+        value: "1"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: vesper-redis
+          property: connectionString
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: INNGEST_EVENT_KEY
+        sync: false
+      - key: INNGEST_SIGNING_KEY
+        sync: false
+      - key: SENDER_EMAIL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+
+  - type: keyvalue
+    name: vesper-redis
+    plan: free
+    region: singapore
+    # Internal connections only
+    ipAllowList: []
+    # Only keys with a TTL (cache entries, rate-limit windows) are evicted; workspace cache versions are kept
+    maxmemoryPolicy: volatile-lru
