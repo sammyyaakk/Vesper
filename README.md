@@ -1,8 +1,10 @@
 # Vesper
 
+[![CI](https://github.com/sammyyaakk/Vesper/actions/workflows/ci.yml/badge.svg)](https://github.com/sammyyaakk/Vesper/actions/workflows/ci.yml)
+
 Vesper is a multi-tenant project management app. Teams work inside **workspaces**, which contain **projects**, which contain **tasks** with **comments**. Members are assigned tasks, get an email when that happens, and get a reminder when a task is due.
 
-> **Status:** under active development. Done so far: a hardened TypeScript backend, performance work, Redis caching and rate limiting, and real-time updates. Next: Docker and CI. See [Roadmap](#roadmap).
+> **Status:** all six planned phases are done: a hardened TypeScript backend, performance work, Redis caching and rate limiting, real-time updates, and Docker, CI and deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -26,7 +28,8 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 | Backend | Node.js, Express 5, TypeScript (strict) |
 | Logging | [Pino](https://getpino.io) structured JSON logs with per-request IDs |
 | Validation | [Zod](https://zod.dev) schemas for every request body and URL parameter |
-| Testing | Vitest + Supertest integration tests against a disposable Postgres in Docker |
+| Testing | Vitest + Supertest integration tests against a disposable Postgres and Redis in Docker |
+| CI/CD | GitHub Actions (tests, lint, builds, migrations); Docker; Render (API) and Vercel (client) |
 | Database | PostgreSQL on [Neon](https://neon.tech), via Prisma 6 and the Neon serverless driver adapter |
 | Cache and rate limits | Redis 7 via [ioredis](https://github.com/redis/ioredis); optional (the API fails open without it) |
 | Auth | [Clerk](https://clerk.com): users, sessions, Organizations (workspaces) |
@@ -434,6 +437,6 @@ Permission rules live in one module (`server/services/authorization.ts`). Leads 
 - [x] **Phase 3**: Screen-shaped endpoints replacing a 76 MB workspace payload; keyset pagination with server-side filters; seven indexes chosen from `EXPLAIN ANALYZE`; benchmarks on a 50k-task dataset (project task list: 7.2 s → 19 ms p97.5)
 - [x] **Phase 4**: Redis: per-user rate limiting (sliding-window counter in Lua); dashboard cache with versioned-key invalidation (summary 265 → 1,744 req/s); both fail open. Task editing
 - [x] **Phase 5**: Real-time task and comment updates with Socket.io: handshake auth, authorized project rooms, pushed revocation, resync after reconnect, Redis adapter for multiple instances. Fixed: Clerk membership removals weren't synced
-- [ ] **Phase 6**: Docker Compose (API + Postgres + Redis) and GitHub Actions CI
+- [x] **Phase 6**: Multi-stage Docker image (non-root, 628 MB) and a full-stack Compose file with a migration job; GitHub Actions CI (typecheck, 165 tests on real Postgres/Redis, lint, builds); free-tier deployment where migrations run before each deploy
 
 A changelog of what changed in each phase, and why, is kept in [`CHANGELOG.md`](CHANGELOG.md).
