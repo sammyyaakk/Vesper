@@ -1,4 +1,5 @@
 # Local Postgres for performance benchmarks; the named volume keeps the 50k-task seed between runs
+name: vesper-bench
 services:
   postgres-bench:
     image: postgres:17-alpine
@@ -18,3 +19,5 @@ services:
 
 volumes:
   bench-data:
+    # Pinned so the seeded data survives project renames
+    name: vesper_bench-data

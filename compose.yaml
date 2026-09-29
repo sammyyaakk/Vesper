@@ -1,0 +1,74 @@
+# The whole backend in containers: API, Postgres, Redis and the Inngest dev server.
+# Usage (from the repo root): docker compose up --build
+# Clerk keys (and optionally SMTP) come from server/.env; everything else is set here.
+name: vesper
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vesper
+      POSTGRES_PASSWORD: vesper
+      POSTGRES_DB: vesper
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vesper -d vesper"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Runs once and exits; the API starts only after it succeeds
+  migrate:
+    build:
+      context: server
+      target: build
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://vesper:vesper@postgres:5432/vesper
+      DIRECT_URL: postgresql://vesper:vesper@postgres:5432/vesper
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: server
+    env_file:
+      - path: server/.env
+        required: false
+    # These override server/.env, which points at Neon and localhost
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://vesper:vesper@postgres:5432/vesper
+      DIRECT_URL: postgresql://vesper:vesper@postgres:5432/vesper
+      REDIS_URL: redis://redis:6379
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      INNGEST_DEV: http://inngest:8288
+      LOG_LEVEL: info
+    ports:
+      - "5000:5000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  inngest:
+    image: inngest/inngest:v1.13.7
+    command: ["inngest", "dev", "-u", "http://api:5000/api/inngest", "--no-discovery"]
+    ports:
+      - "8288:8288"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

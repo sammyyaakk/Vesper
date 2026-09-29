@@ -1,4 +1,5 @@
 # Disposable Postgres for the server's integration tests (data lives in memory only)
+name: vesper-test
 services:
   postgres-test:
     image: postgres:17-alpine

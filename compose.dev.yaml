@@ -1,4 +1,5 @@
 # Local services for development (the database is Neon; Redis runs here)
+name: vesper-dev
 services:
   redis:
     image: redis:7-alpine
