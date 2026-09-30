@@ -34,7 +34,16 @@ app.use(clerkMiddleware());
 
 app.get("/", (req, res) => res.send("Server is live!"));
 
-app.use("/api/inngest", serve({ client: inngest, functions }));
+// Only the methods Inngest uses reach its handler (GET introspection, PUT sync, POST runs); SDKs up to 3.53.1 leaked
+// process.env on other methods (CVE-2026-42047), so this stays as defense in depth
+const inngestHandler = serve({ client: inngest, functions });
+app.route("/api/inngest")
+    .get(inngestHandler)
+    .post(inngestHandler)
+    .put(inngestHandler)
+    .all((_req, res) => {
+        res.set("Allow", "GET, POST, PUT").status(405).json({ message: "Method not allowed" });
+    });
 
 app.use("/api/workspaces", protect, ...rateLimits, workspaceRouter);
 app.use("/api/projects", protect, ...rateLimits, projectRouter);
