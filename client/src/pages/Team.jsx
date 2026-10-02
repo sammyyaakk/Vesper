@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { UsersIcon, Search, UserPlus, Mail, Shield, Activity } from "lucide-react";
 import InviteMemberDialog from "../components/InviteMemberDialog";
+import MemberRoleControl from "../components/MemberRoleControl";
 import { useSelector } from "react-redux";
 
 const Team = () => {
@@ -138,14 +139,7 @@ const Team = () => {
                                                 {user.user.email}
                                             </td>
                                             <td className="px-6 py-2.5 whitespace-nowrap">
-                                                <span
-                                                    className={`px-2 py-1 text-xs rounded-md ${user.role === "ADMIN"
-                                                            ? "bg-purple-100 dark:bg-purple-500/20 text-purple-500 dark:text-purple-400"
-                                                            : "bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300"
-                                                        }`}
-                                                >
-                                                    {user.role || "User"}
-                                                </span>
+                                                <MemberRoleControl member={user} workspace={currentWorkspace} />
                                             </td>
                                         </tr>
                                     ))}
@@ -176,14 +170,7 @@ const Team = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <span
-                                            className={`px-2 py-1 text-xs rounded-md ${user.role === "ADMIN"
-                                                    ? "bg-purple-100 dark:bg-purple-500/20 text-purple-500 dark:text-purple-400"
-                                                    : "bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300"
-                                                }`}
-                                        >
-                                            {user.role || "User"}
-                                        </span>
+                                        <MemberRoleControl member={user} workspace={currentWorkspace} />
                                     </div>
                                 </div>
                             ))}
