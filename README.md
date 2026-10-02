@@ -448,6 +448,8 @@ A project can have several Leads; its named lead (the accountable person, shown 
 - **Tests can't touch real systems:** the test run refuses any database that isn't a local `*_test` database, and email sending is stubbed globally.
 - **Secrets stay out of logs:** request logs keep only method, URL, status and timing; authorization headers and cookies are redacted.
 - **Rate limiting:** 300 reads and 60 writes per minute per user (IP address for anonymous requests), shared across API instances through Redis. A sliding-window counter in one Lua script, so the check and the increment are atomic and a burst at a minute boundary can't double the limit. Server-to-server Inngest calls aren't limited. Tested in `rateLimit.test.ts`.
+- **Dependencies are watched:** Dependabot opens weekly update PRs (npm, GitHub Actions, the Docker base image), and CI fails on any critical advisory in production dependencies (`npm audit --omit=dev --audit-level=critical`). Remaining high advisories are triaged in [`CHANGELOG.md`](CHANGELOG.md).
+- **`main` is protected:** changes land only through pull requests whose server, client and image checks pass; force pushes and deletion are blocked.
 
 ---
 
@@ -460,5 +462,14 @@ A project can have several Leads; its named lead (the accountable person, shown 
 - [x] **Phase 4**: Redis: per-user rate limiting (sliding-window counter in Lua); dashboard cache with versioned-key invalidation (summary 265 → 1,744 req/s); both fail open. Task editing
 - [x] **Phase 5**: Real-time task and comment updates with Socket.io: handshake auth, authorized project rooms, pushed revocation, resync after reconnect, Redis adapter for multiple instances. Fixed: Clerk membership removals weren't synced
 - [x] **Phase 6**: Multi-stage Docker image (non-root, 628 MB) and a full-stack Compose file with a migration job; GitHub Actions CI (typecheck, 165 tests on real Postgres/Redis, lint, builds); free-tier deployment where migrations run before each deploy
+
+- [x] **After launch**: live updates on every screen; team management (roles, removal) from the app; per-project roles (Lead, Contributor, Viewer); order-independent Clerk sync; production CVE contained and secrets rotated; dependency scanning
+
+### Known limitations
+
+- A member removed while the app is open keeps seeing the old screen until their next action or navigation (they no longer receive events, and every request is refused).
+- Members can be removed from the whole workspace, not from a single project.
+- Free hosting: the API sleeps after about 15 minutes idle (the next request takes up to a minute), and the Clerk development instance shows a "Development mode" badge.
+- `nodemailer` has a high-severity advisory fixed only in a major version; Vesper never passes user input to the affected option (`envelope.size`), so it's scheduled as a separate, tested upgrade.
 
 A changelog of what changed in each phase, and why, is kept in [`CHANGELOG.md`](CHANGELOG.md).

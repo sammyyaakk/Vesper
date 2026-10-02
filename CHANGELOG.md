@@ -2,6 +2,28 @@
 
 Each phase lists what changed and why.
 
+## After launch: production and product
+
+### Going live
+- Deployed: client on Vercel (vesperflow.vercel.app), API and Redis on Render, a Neon `production` branch (local development moved to a separate `development` branch), Inngest Cloud, Clerk development instance.
+- Clerk → Inngest connected through an Inngest webhook with a transform (`clerk/<event type>`, deduplicated on Clerk's `Svix-Id`); the one-click integration didn't create anything.
+- CI's migrate job retries while Neon's free compute wakes up; it had failed with "can't reach database" and blocked Render's auto-deploy.
+
+### Security
+- Contained CVE-2026-42047 in production: the Inngest SDK (3.44.3) returned the server's environment variables to unauthenticated PATCH/DELETE requests on `/api/inngest`. Upgraded to 3.54.2, restricted the endpoint to GET/POST/PUT (405 otherwise) with a regression test, and rotated every exposed secret (database password, Clerk secret key, Inngest signing and event keys). An earlier "SDK version denied" error from the Inngest dev server had been this advisory; the dev server had been pinned around it instead.
+- Dependency audit: a critical Clerk advisory (middleware route protection bypass with organizations, the combination Vesper uses) and high advisories in Clerk, Express's `path-to-regexp`, Axios, React Router, Vite and others fixed with compatible updates; the client now has none. Dependabot and a CI gate on critical advisories added.
+- `main` protected: pull requests with passing checks only.
+
+### Identity sync
+- New users were sometimes offered "Create organization" again while their workspace was still syncing, and each retry created another organization. The app now waits ("Setting up your workspace…") when Clerk already has the membership.
+- The sync no longer depends on event order or on every event arriving: `user.updated` creates a missing user, and a membership for an unknown user creates them from the membership's own data. Removed the inherited `organizationInvitation.accepted` handler, which read a field Clerk's payload doesn't have and failed every time.
+
+### Product
+- Every screen is live: a workspace room notifies members after any change (`workspaceChanged()` invalidates the cache and notifies in one call), and clients refetch once per burst.
+- Team page: admins change members' roles and remove members (through Clerk); the owner and the current user are protected.
+- Per-project roles: Lead (several per project, the named lead always included), Contributor and Viewer (read and comment). The migration makes every existing named lead a Lead.
+- Dashboard cards expand in place instead of showing a "View more" button that did nothing.
+
 ## Phase 6: Docker, CI and deployment
 
 ### Docker
