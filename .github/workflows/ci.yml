@@ -53,6 +53,9 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - run: npm test
+      # Fails on any critical advisory in production dependencies (lower severities are triaged via Dependabot)
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
 
   client:
     name: Client (lint + build)
@@ -71,6 +74,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
 
   docker:
     name: API image builds
