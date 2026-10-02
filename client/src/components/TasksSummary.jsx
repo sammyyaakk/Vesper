@@ -1,9 +1,12 @@
-import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Clock, AlertTriangle, User } from "lucide-react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 
 export default function TasksSummary() {
     const summary = useSelector((state) => state.workspace.summary);
+    const [expanded, setExpanded] = useState({});
+    const toggle = (title) => setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
 
     const summaryCards = [
         {
@@ -11,21 +14,21 @@ export default function TasksSummary() {
             count: summary?.tasks.mine ?? 0,
             icon: User,
             color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
-            items: (summary?.myTasks ?? []).slice(0, 3)
+            items: summary?.myTasks ?? []
         },
         {
             title: "Overdue",
             count: summary?.tasks.overdue ?? 0,
             icon: AlertTriangle,
             color: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400",
-            items: (summary?.overdueTasks ?? []).slice(0, 3)
+            items: summary?.overdueTasks ?? []
         },
         {
             title: "In Progress",
             count: summary?.tasks.inProgress ?? 0,
             icon: Clock,
             color: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400",
-            items: (summary?.inProgressTasks ?? []).slice(0, 3)
+            items: summary?.inProgressTasks ?? []
         }
     ];
 
@@ -53,7 +56,7 @@ export default function TasksSummary() {
                             </p>
                         ) : (
                             <div className="space-y-3">
-                                {card.items.map((issue) => (
+                                {(expanded[card.title] ? card.items : card.items.slice(0, 3)).map((issue) => (
                                     <Link key={issue.id} to={`/taskDetails?projectId=${issue.projectId}&taskId=${issue.id}`} className="block p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                         <h4 className="text-sm font-medium text-gray-800 dark:text-white truncate">
                                             {issue.title}
@@ -63,10 +66,20 @@ export default function TasksSummary() {
                                         </p>
                                     </Link>
                                 ))}
-                                {card.count > 3 && (
-                                    <button className="flex items-center justify-center w-full text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-white mt-2">
-                                        View {card.count - 3} more <ArrowRight className="w-3 h-3 ml-2" />
+                                {card.items.length > 3 && (
+                                    <button type="button" onClick={() => toggle(card.title)} aria-expanded={Boolean(expanded[card.title])} className="flex items-center justify-center w-full text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-white mt-2">
+                                        {expanded[card.title] ? (
+                                            <>Show less <ChevronUp className="w-3 h-3 ml-2" /></>
+                                        ) : (
+                                            <>Show {card.items.length - 3} more <ChevronDown className="w-3 h-3 ml-2" /></>
+                                        )}
                                     </button>
+                                )}
+                                {/* The dashboard summary carries only the first few tasks of each list */}
+                                {expanded[card.title] && card.count > card.items.length && (
+                                    <p className="text-xs text-center text-gray-400 dark:text-zinc-500">
+                                        Showing {card.items.length} of {card.count}
+                                    </p>
                                 )}
                             </div>
                         )}
