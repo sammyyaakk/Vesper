@@ -35,7 +35,7 @@ describe("/api/inngest", () => {
         const res = await anonymous().get("/api/inngest");
 
         expect(res.status).toBe(200);
-        expect(res.body.function_count).toBe(11);
+        expect(res.body.function_count).toBe(10);
         expect(res.text).not.toContain(CANARY);
     });
 });

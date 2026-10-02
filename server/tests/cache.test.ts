@@ -140,7 +140,9 @@ describe("workspace cache", () => {
             await projectsOf(team.admin.id, team.workspace.id);
             await createProject(team.workspace.id, team.admin.id);
 
-            await handlers.handleWorkspaceMemberCreation({ data: { user_id: joiner.id, organization_id: team.workspace.id, role: "org:member" } });
+            await handlers.handleWorkspaceMemberChange({
+                data: { role: "org:member", organization: { id: team.workspace.id }, public_user_data: { user_id: joiner.id } },
+            });
 
             expect(await projectsOf(team.admin.id, team.workspace.id)).toHaveLength(3);
         });

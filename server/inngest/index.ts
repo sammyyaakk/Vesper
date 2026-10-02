@@ -16,8 +16,6 @@ const syncWorkspaceUpdation = inngest.createFunction({ id: "update-workspace-fro
 
 const syncWorkspaceDeletion = inngest.createFunction({ id: "delete-workspace-with-clerk" }, { event: "clerk/organization.deleted" }, ({ event }) => handlers.handleWorkspaceDeletion(event));
 
-const syncWorkspaceMemberCreation = inngest.createFunction({ id: "sync-workspace-member-from-clerk" }, { event: "clerk/organizationInvitation.accepted" }, ({ event }) => handlers.handleWorkspaceMemberCreation(event));
-
 const syncWorkspaceMemberChange = inngest.createFunction(
     { id: "sync-workspace-member-change-from-clerk" },
     [{ event: "clerk/organizationMembership.created" }, { event: "clerk/organizationMembership.updated" }],
@@ -40,4 +38,4 @@ const sendTaskDueReminder = inngest.createFunction(
     ({ event, step }) => handlers.handleTaskReminder(event, step),
 );
 
-export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation, syncWorkspaceMemberChange, syncWorkspaceMemberDeletion, sendTaskAssignmentEmail, sendTaskDueReminder];
+export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberChange, syncWorkspaceMemberDeletion, sendTaskAssignmentEmail, sendTaskDueReminder];

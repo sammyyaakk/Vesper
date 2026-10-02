@@ -86,3 +86,36 @@ describe("adding or changing a member (Clerk organizationMembership.created / up
         expect((await as(admin.id).get(`/api/projects/${project.id}`)).status).toBe(403);
     });
 });
+
+// Clerk webhooks arrive at least once, in any order, and one can be missed; the sync must converge regardless
+describe("out-of-order or missed Clerk events", () => {
+    const clerkUser = (id: string, first: string, email: string) => ({
+        data: { id, first_name: first, last_name: "Late", email_addresses: [{ email_address: email }], image_url: "https://img.test/a.png" },
+    });
+
+    it("user.updated for a user we haven't seen creates them", async () => {
+        await handlers.handleUserUpdation(clerkUser("user_missed_create", "Missed", "missed@test.dev"));
+
+        expect(await prisma.user.findUnique({ where: { id: "user_missed_create" } })).toMatchObject({ name: "Missed Late", email: "missed@test.dev" });
+    });
+
+    it("a membership for a user we haven't seen creates them from the event, and later user events fill in the rest", async () => {
+        const { workspace } = await createTeam();
+        const membershipEvent = {
+            data: {
+                role: "org:member",
+                organization: { id: workspace.id },
+                public_user_data: { user_id: "user_joined_first", identifier: "joiner@test.dev", first_name: "Joiner", last_name: null, image_url: "https://img.test/j.png" },
+            },
+        };
+
+        await handlers.handleWorkspaceMemberChange(membershipEvent);
+
+        expect(await prisma.user.findUnique({ where: { id: "user_joined_first" } })).toMatchObject({ email: "joiner@test.dev", name: "Joiner" });
+        expect(await roleOf(workspace.id, "user_joined_first")).toBe("MEMBER");
+
+        await handlers.handleUserCreation(clerkUser("user_joined_first", "Joanna", "joanna@test.dev"));
+        expect(await prisma.user.findUnique({ where: { id: "user_joined_first" } })).toMatchObject({ name: "Joanna Late", email: "joanna@test.dev" });
+        expect(await roleOf(workspace.id, "user_joined_first")).toBe("MEMBER");
+    });
+});
