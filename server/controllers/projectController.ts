@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { getUserId } from "../middlewares/authMiddleware.js";
-import { addMemberSchema, createProjectSchema, projectParamsSchema, updateProjectSchema } from "../schemas/project.js";
+import { addMemberSchema, createProjectSchema, memberParamsSchema, projectParamsSchema, setMemberRoleSchema, updateProjectSchema } from "../schemas/project.js";
 import { calendarQuerySchema, taskListQuerySchema } from "../schemas/query.js";
 import * as projectService from "../services/projectService.js";
 import { parse } from "../utils/validation.js";
@@ -17,9 +17,16 @@ export const updateProject = async (req: Request, res: Response) => {
 
 export const addMember = async (req: Request, res: Response) => {
     const { projectId } = parse(projectParamsSchema, req.params);
-    const { email } = parse(addMemberSchema, req.body);
-    const member = await projectService.addMember(getUserId(req), projectId, email);
+    const { email, role } = parse(addMemberSchema, req.body);
+    const member = await projectService.addMember(getUserId(req), projectId, email, role);
     return res.json({ member, message: "Member added successfully" });
+};
+
+export const setMemberRole = async (req: Request, res: Response) => {
+    const { projectId, userId } = parse(memberParamsSchema, req.params);
+    const { role } = parse(setMemberRoleSchema, req.body);
+    const member = await projectService.setMemberRole(getUserId(req), projectId, userId, role);
+    return res.json({ member, message: "Role updated" });
 };
 
 export const getProject = async (req: Request, res: Response) => {

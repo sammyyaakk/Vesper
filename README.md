@@ -13,7 +13,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 - Sign-in with email or Google; workspaces are Clerk Organizations with **Admin** / **Member** roles
 - Projects with status, priority, dates, a team lead and project members; progress calculated from completed tasks
 - Tasks with type, priority, status, optional assignee and a required due date; editable after creation; comments on tasks
-- Members can claim unassigned tasks and complete their own; leads and workspace admins manage everything
+- Two layers of roles: workspace **Admin / Member** (in Clerk) and per-project **Lead / Contributor / Viewer**; members only see the projects they're on
 - Due-date reminders that follow due-date changes (to the assignee, or the project lead if unassigned)
 - Dashboard, project analytics and calendar views; light/dark theme
 - **Live updates:** every screen (task lists, tasks and comments, dashboard, projects, team, analytics, calendar) updates for everyone in the workspace without reloading
@@ -108,7 +108,8 @@ Each user gets **300 reads and 60 writes per minute**. Every response carries `R
 | GET | `/api/projects/:id/tasks` | A page of tasks; filters `status`, `type`, `priority`, `assignee=me\|none\|<userId>` |
 | GET | `/api/projects/:id/stats` | Task counts by status, type, priority; overdue |
 | GET | `/api/projects/:id/calendar?from=&to=` | Tasks due in a window (≤ 62 days), upcoming, overdue |
-| POST | `/api/projects/:id/addMember` | Add a workspace member to a project |
+| POST | `/api/projects/:id/addMember` | Add a workspace member to a project, with a project role |
+| PUT | `/api/projects/:id/members/:userId` | Change a member's project role (lead or workspace admin) |
 | POST | `/api/tasks` | Create a task |
 | GET | `/api/tasks/:id` | A task with its assignee and project |
 | PUT | `/api/tasks/:id` | Update a task (field rules per role) |
@@ -409,7 +410,19 @@ An audit of the inherited codebase found the issues below. Each was reproduced w
 | Membership removals and role changes in Clerk weren't synced | Members removed from a workspace kept full access; demoted admins kept admin rights | Membership created/updated/deleted handled; removal hands over ownership and led projects, removes project memberships, unassigns tasks; live subscriptions revoked | `membershipSync.test.ts`, `realtime.test.ts` |
 | (New surface) Real-time connections | Sockets and rooms need the same guarantees as REST | Token verified at the handshake; room joins use the REST permission check; events only after successful writes | `realtime*.test.ts` |
 
-Permission rules live in one module (`server/services/authorization.ts`). Leads and workspace admins manage projects and tasks; members can create, claim and complete their own tasks.
+Permission rules live in one module (`server/services/authorization.ts`), used by the REST API and the real-time rooms alike.
+
+| Can… | Workspace Admin | Project Lead | Contributor | Viewer |
+|---|---|---|---|---|
+| See projects | all | theirs | theirs | theirs |
+| Create projects | ✅ | — | — | — |
+| Edit project settings, add members, set project roles | ✅ | ✅ | — | — |
+| Create, edit, assign and delete any task | ✅ | ✅ | — | — |
+| Create unassigned or self-assigned tasks, claim, update their own | ✅ | ✅ | ✅ | — |
+| Comment | ✅ | ✅ | ✅ | ✅ |
+| Manage workspace members and roles (via Clerk) | ✅ | — | — | — |
+
+A project can have several Leads; its named lead (the accountable person, shown on the project) is always one of them. Viewers can't be assigned tasks. Tested role by role in `projectRoles.test.ts`.
 
 ### Input validation and error handling
 

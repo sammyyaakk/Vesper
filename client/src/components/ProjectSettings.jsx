@@ -1,7 +1,9 @@
 import { format } from "date-fns";
 import { Plus, Save } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { useSelector } from "react-redux";
+import { canManageProject, PROJECT_ROLES } from "../utils/permissions";
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import AddProjectMember from "./AddProjectMember";
@@ -9,6 +11,19 @@ import AddProjectMember from "./AddProjectMember";
 export default function ProjectSettings({ project, onChanged }) {
     
     const { getToken } = useAuth();
+    const { user } = useUser();
+    const workspaceRole = useSelector((state) => state.workspace.currentWorkspace?.role);
+    const canManage = canManageProject(project, user?.id, workspaceRole);
+
+    const changeRole = async (member, role) => {
+        try {
+            await api.put(`/api/projects/${project.id}/members/${member.user.id}`, { role }, { headers: { Authorization: `Bearer ${await getToken()}` } });
+            toast.success(`${member.user.name} is now ${role.toLowerCase()}`);
+            onChanged?.();
+        } catch (error) {
+            toast.error(error.response?.data?.message || error.message);
+        }
+    };
 
     const [formData, setFormData] = useState({
         name: "New Website Launch",
@@ -103,10 +118,10 @@ export default function ProjectSettings({ project, onChanged }) {
                         </div>
                     </div>
 
-                    {/* Save Button */}
-                    <button type="submit" disabled={isSubmitting} className="ml-auto flex items-center text-sm justify-center gap-2 bg-gradient-to-br from-blue-500 to-blue-600 text-white px-4 py-2 rounded" >
+                    {/* Save Button: only leads and admins can change project details */}
+                    {canManage && <button type="submit" disabled={isSubmitting} className="ml-auto flex items-center text-sm justify-center gap-2 bg-gradient-to-br from-blue-500 to-blue-600 text-white px-4 py-2 rounded" >
                         <Save className="size-4" /> {isSubmitting ? "Saving..." : "Save Changes"}
-                    </button>
+                    </button>}
                 </form>
             </div>
 
@@ -117,9 +132,11 @@ export default function ProjectSettings({ project, onChanged }) {
                         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-300 mb-4">
                             Team Members <span className="text-sm text-zinc-600 dark:text-zinc-400">({project.members.length})</span>
                         </h2>
-                        <button type="button" onClick={() => setIsDialogOpen(true)} className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800" >
-                            <Plus className="size-4 text-zinc-900 dark:text-zinc-300" />
-                        </button>
+                        {canManage && (
+                            <button type="button" onClick={() => setIsDialogOpen(true)} aria-label="Add member to project" className="p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800" >
+                                <Plus className="size-4 text-zinc-900 dark:text-zinc-300" />
+                            </button>
+                        )}
                         <AddProjectMember isDialogOpen={isDialogOpen} setIsDialogOpen={setIsDialogOpen} project={project} onAdded={onChanged} />
                     </div>
 
@@ -129,7 +146,15 @@ export default function ProjectSettings({ project, onChanged }) {
                             {project.members.map((member, index) => (
                                 <div key={index} className="flex items-center justify-between px-3 py-2 rounded dark:bg-zinc-800 text-sm text-zinc-900 dark:text-zinc-300" >
                                     <span> {member?.user?.email || "Unknown"} </span>
-                                    {project.teamLead === member.user.id && <span className="px-2 py-0.5 rounded-xs ring ring-zinc-200 dark:ring-zinc-600">Team Lead</span>}
+                                    {project.teamLead === member.user.id ? (
+                                        <span className="px-2 py-0.5 rounded-xs ring ring-zinc-200 dark:ring-zinc-600">Lead (named)</span>
+                                    ) : canManage ? (
+                                        <select aria-label={`Project role of ${member.user.name}`} value={member.role} onChange={(e) => changeRole(member, e.target.value)} className="text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1">
+                                            {PROJECT_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                                        </select>
+                                    ) : (
+                                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{member.role}</span>
+                                    )}
                                 </div>
                             ))}
                         </div>

@@ -1,4 +1,4 @@
-import type { Prisma, WorkspaceRole } from "@prisma/client";
+import type { Prisma, ProjectRole, WorkspaceRole } from "@prisma/client";
 import prisma from "../../configs/prisma.js";
 
 let sequence = 0;
@@ -33,9 +33,14 @@ export const createProject = async (
         data: { name: `Project ${next()}`, workspaceId, teamLead, ...overrides },
     });
     const members = Array.from(new Set([teamLead, ...memberIds]));
-    await prisma.projectMember.createMany({ data: members.map((userId) => ({ projectId: project.id, userId })) });
+    await prisma.projectMember.createMany({
+        data: members.map((userId) => ({ projectId: project.id, userId, role: userId === teamLead ? ("LEAD" as const) : ("CONTRIBUTOR" as const) })),
+    });
     return project;
 };
+
+export const addProjectMember = (projectId: string, userId: string, role: ProjectRole = "CONTRIBUTOR") =>
+    prisma.projectMember.create({ data: { projectId, userId, role } });
 
 export const createTask = (projectId: string, overrides: Partial<Prisma.TaskUncheckedCreateInput> = {}) =>
     prisma.task.create({

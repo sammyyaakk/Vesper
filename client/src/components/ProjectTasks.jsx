@@ -9,7 +9,7 @@ import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap 
 import { useNavigate } from "react-router-dom";
 import TaskActionsMenu from "./TaskActionsMenu";
 import TaskFormDialog from "./TaskFormDialog";
-import { canManageProject } from "../utils/permissions";
+import { canContribute as canContributeTo, canManageProject } from "../utils/permissions";
 import { useProjectRoom } from "../realtime/useProjectRoom";
 
 const typeIcons = {
@@ -50,6 +50,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
     const workspaceRole = useSelector((state) => state.workspace.currentWorkspace?.role);
     const members = project?.members ?? [];
     const canManage = canManageProject(project, user?.id, workspaceRole);
+    const canContribute = canContributeTo(project, user?.id, workspaceRole);
     const [editingTask, setEditingTask] = useState(null);
 
     // Filters run on the server; only non-empty ones are sent
@@ -177,9 +178,9 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
     const actionsFor = (task) => ({
         onOpen: () => openTask(task),
         onEdit: canManage ? () => setEditingTask(task) : undefined,
-        onDelete: () => handleDelete([task.id]),
-        onClaim: !task.assigneeId && user ? () => handleAssign(task, user.id) : undefined,
-        onUnassign: user && task.assigneeId === user.id ? () => handleAssign(task, null) : undefined,
+        onDelete: canManage ? () => handleDelete([task.id]) : undefined,
+        onClaim: canContribute && !task.assigneeId && user ? () => handleAssign(task, user.id) : undefined,
+        onUnassign: canContribute && user && task.assigneeId === user.id ? () => handleAssign(task, null) : undefined,
     });
 
     const handleStatusChange = async (taskId, newStatus) => {
@@ -280,7 +281,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
                     </button>
                 )}
 
-                <button
+                {canManage && <button
                     type="button"
                     onClick={() => handleDelete(selectedTasks)}
                     disabled={selectedTasks.length === 0}
@@ -289,7 +290,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
                 >
                     <Trash className="size-4" />
                     {selectedTasks.length > 0 ? `Delete (${selectedTasks.length})` : "Delete"}
-                </button>
+                </button>}
             </div>
 
             {/* Tasks Table */}
@@ -357,6 +358,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
                                                     <select
                                                         name="status"
                                                         onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                                        disabled={!canContribute}
                                                         value={task.status}
                                                         className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer"
                                                     >
@@ -437,6 +439,7 @@ const ProjectTasks = ({ projectId, reloadKey, onChanged }) => {
                                             <select
                                                 name="status"
                                                 onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                                        disabled={!canContribute}
                                                 value={task.status}
                                                 className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200"
                                             >

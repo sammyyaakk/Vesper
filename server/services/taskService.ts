@@ -8,6 +8,7 @@ import {
     assertCanCreateTaskFor,
     assertCanUpdateTask,
     isProjectMember,
+    projectRoleOf,
     requireProjectAccess,
     requireProjectManager,
     requireTaskAccess,
@@ -35,15 +36,16 @@ const dueDateSet = (taskId: string, dueDate: Date): TaskEvent => ({
 });
 
 const assertAssigneeOnProject = (project: Parameters<typeof isProjectMember>[0], assigneeId: string | null | undefined) => {
-    if (assigneeId && !isProjectMember(project, assigneeId)) {
-        throw AppError.badRequest("Assignee must be a member of this project");
-    }
+    if (!assigneeId) return;
+    if (!isProjectMember(project, assigneeId)) throw AppError.badRequest("Assignee must be a member of this project");
+    if (projectRoleOf(project, assigneeId) === "VIEWER") throw AppError.badRequest("Viewers can't be assigned tasks");
 };
 
 export const create = async (userId: string, input: CreateTaskInput) => {
     const { projectId, title, description, type, status, priority, assigneeId, dueDate } = input;
 
-    const { project, isManager } = await requireProjectAccess(projectId, userId);
+    const { project, isManager, canContribute } = await requireProjectAccess(projectId, userId);
+    if (!canContribute) throw AppError.forbidden("Viewers can't create tasks");
     assertCanCreateTaskFor(isManager, userId, assigneeId);
     assertAssigneeOnProject(project, assigneeId);
 
@@ -78,7 +80,8 @@ export const create = async (userId: string, input: CreateTaskInput) => {
 };
 
 export const update = async (userId: string, taskId: string, changes: UpdateTaskInput) => {
-    const { task, project, isManager } = await requireTaskAccess(taskId, userId);
+    const { task, project, isManager, canContribute } = await requireTaskAccess(taskId, userId);
+    if (!canContribute) throw AppError.forbidden("Viewers can't change tasks");
     assertCanUpdateTask(task, isManager, userId, changes);
     assertAssigneeOnProject(project, changes.assigneeId);
 

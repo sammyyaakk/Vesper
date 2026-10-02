@@ -107,10 +107,18 @@ model Project {
     @@index([workspaceId])
 }
 
+// What someone can do inside one project (workspace admins can do everything in every project)
+enum ProjectRole {
+    LEAD
+    CONTRIBUTOR
+    VIEWER
+}
+
 model ProjectMember {
-    id        String  @id @default(uuid())
+    id        String      @id @default(uuid())
     userId    String
     projectId String
+    role      ProjectRole @default(CONTRIBUTOR)
     user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
     project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
