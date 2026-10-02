@@ -42,7 +42,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 2s --health-timeout 3s --health-retries 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -65,7 +65,7 @@ jobs:
       run:
         working-directory: client
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: docker build --tag vesper-api:ci server
 
   # Applies migrations to the production database after every check passed on main.
@@ -107,7 +107,7 @@ jobs:
         # Runs before checkout, when server/ doesn't exist yet
         working-directory: .
         run: echo "::notice::PRODUCTION_DIRECT_URL isn't set; skipping migrations"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: env.DIRECT_URL != ''
       - uses: actions/setup-node@v5
         if: env.DIRECT_URL != ''
