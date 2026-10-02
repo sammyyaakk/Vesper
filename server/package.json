@@ -41,7 +41,7 @@
     "vitest": "5.0.2"
   },
   "dependencies": {
-    "@clerk/express": "^1.7.26",
+    "@clerk/express": "^2.1.73",
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/adapter-neon": "^6.15.0",
     "@prisma/client": "^6.15.0",
