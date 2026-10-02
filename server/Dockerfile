@@ -1,5 +1,5 @@
 # API image. Build: docker build -t vesper-api server
-FROM node:24-slim AS base
+FROM node:26-slim AS base
 # Prisma's query engine needs OpenSSL
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
