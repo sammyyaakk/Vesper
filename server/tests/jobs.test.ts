@@ -212,11 +212,11 @@ describe("Clerk sync", () => {
         const admin = await createUser();
         const billing = await createUser();
 
-        await handlers.handleWorkspaceMemberCreation({
-            data: { user_id: admin.id, organization_id: workspace.id, role: "org:admin", role_name: "Admin" },
+        await handlers.handleWorkspaceMemberChange({
+            data: { role: "org:admin", organization: { id: workspace.id }, public_user_data: { user_id: admin.id } },
         });
-        await handlers.handleWorkspaceMemberCreation({
-            data: { user_id: billing.id, organization_id: workspace.id, role: "org:billing_manager", role_name: "Billing Manager" },
+        await handlers.handleWorkspaceMemberChange({
+            data: { role: "org:billing_manager", organization: { id: workspace.id }, public_user_data: { user_id: billing.id } },
         });
 
         const roles = await prisma.workspaceMember.findMany({ where: { userId: { in: [admin.id, billing.id] } }, select: { userId: true, role: true } });

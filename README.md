@@ -71,7 +71,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 
 **Errors.** Services throw `AppError`s (400/403/404/…). Express 5 forwards them to a single `errorHandler`, which returns the status and message. Unexpected errors are logged with their stack and the request ID; the client only gets `500 {"message":"Internal server error","requestId":"…"}`.
 
-**Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.*`, `clerk/organization.*`, `clerk/organizationMembership.*`), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces. Removing a member or changing their role takes effect immediately: their access, cached views and live subscriptions are revoked. When deploying, subscribe Clerk's webhook to the `user.*`, `organization.*`, `organizationMembership.*` and `organizationInvitation.accepted` events.
+**Identity sync.** Users, workspaces and workspace memberships live in Clerk. Clerk sends a webhook for each change, Inngest turns it into an event (`clerk/user.*`, `clerk/organization.*`, `clerk/organizationMembership.*`), and an Inngest function copies it into Postgres. That keeps relational data (projects, tasks) joinable with users and workspaces. Removing a member or changing their role takes effect immediately: their access, cached views and live subscriptions are revoked. Webhooks can arrive late, out of order or not at all, so each handler is an idempotent upsert that doesn't depend on another event: a membership for a user we haven't seen yet creates the user from the membership's own data, and `user.updated` creates a missing user.
 
 **Redis.** Rate limiting (per user, before the routes) and the dashboard cache (inside the services, after the permission check) both use Redis. Postgres stays the source of truth: if Redis is missing or down, requests go straight to the database without limits, and the outage is logged once. See [Caching](#caching) and [Security](#security).
 
@@ -308,8 +308,14 @@ Everything runs on free tiers:
    - `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`: from step 5 (they can be filled in afterwards)
    - `SENDER_EMAIL`, `SMTP_USER`, `SMTP_PASS`: Brevo SMTP (optional; without them only emails fail)
 4. **Vercel:** Add New → Project → this repository, **Root Directory `client`** (Vite is detected). Environment variables: `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_BASEURL` (the Render URL, e.g. `https://vesper-api.onrender.com`). If the final Vercel URL differs from what you put in `APP_URL`, update it on Render.
-5. **Inngest Cloud:** create an app; put its event key and signing key into Render. Then **Sync app** with `https://<your-render-url>/api/inngest`: it should find 11 functions.
-6. **Clerk → Inngest:** in Inngest, Integrations → **Clerk**, connect your Clerk application. Make sure the webhook includes `user.*`, `organization.*`, `organizationMembership.*` and `organizationInvitation.accepted`.
+5. **Inngest Cloud:** create an app; put its event key and signing key into Render. Then **Sync app** with `https://<your-render-url>/api/inngest`: it should find 10 functions.
+6. **Clerk → Inngest:** in Inngest, **Manage → Webhooks → Create Webhook** (name `clerk`) with this transform, then copy its URL:
+   ```js
+   function transform(evt, headers = {}, queryParams = {}) {
+     return { name: `clerk/${evt.type}`, id: headers["Svix-Id"], data: evt.data };
+   }
+   ```
+   In Clerk, **Configure → Webhooks → Add Endpoint** (type *Webhook*), paste the URL, and subscribe to all events (or at least `user.*`, `organization.*`, `organizationMembership.*`). The `Svix-Id` header makes Clerk's retries deduplicate in Inngest. Treat the webhook URL as a secret.
 7. **Check:** open the Vercel URL, sign in, and open a project in two browsers: changes should appear in both without reloading.
 
 **Free-tier behaviour:** Render's free web service sleeps after about 15 minutes without traffic; the first request after that takes up to a minute while it starts, and the live connection reconnects by itself. Inngest retries jobs that hit a sleeping API. Preview deployments on Vercel can't call the API, because CORS allows only `APP_URL`.

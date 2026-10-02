@@ -28,9 +28,9 @@ const workspaceIdsOf = async (userId: string) =>
 // Custom Clerk roles get the least privilege
 const toWorkspaceRole = (clerkRole?: string): WorkspaceRole => (clerkRole === "org:admin" ? "ADMIN" : "MEMBER");
 
-// Clerk delivers webhooks at least once, so every sync handler must be safe to replay
-export const handleUserCreation = async (event: { data?: EventData }) => {
-    const { data } = event;
+// Clerk delivers webhooks at least once, in any order, and one can be missed: every sync handler must be safe to replay
+// and must not depend on another event having arrived first. user.created and user.updated both upsert the full record.
+const upsertUser = async (data: EventData) => {
     const fields = {
         email: data?.email_addresses[0]?.email_address,
         name: displayName(data),
@@ -40,6 +40,8 @@ export const handleUserCreation = async (event: { data?: EventData }) => {
     await invalidateWorkspace(...(await workspaceIdsOf(data.id)));
 };
 
+export const handleUserCreation = (event: { data?: EventData }) => upsertUser(event.data);
+
 export const handleUserDeletion = async (event: { data?: EventData }) => {
     const workspaceIds = await workspaceIdsOf(event.data.id);
     await removeUser(event.data.id);
@@ -47,20 +49,7 @@ export const handleUserDeletion = async (event: { data?: EventData }) => {
     disconnectUser(event.data.id);
 };
 
-export const handleUserUpdation = async (event: { data?: EventData }) => {
-    const { data } = event;
-    await prisma.user.update({
-        where: {
-            id: data.id,
-        },
-        data: {
-            email: data?.email_addresses[0]?.email_address,
-            name: displayName(data),
-            image: data?.image_url,
-        },
-    });
-    await invalidateWorkspace(...(await workspaceIdsOf(data.id)));
-};
+export const handleUserUpdation = (event: { data?: EventData }) => upsertUser(event.data);
 
 export const handleWorkspaceCreation = async (event: { data?: EventData }) => {
     const { data } = event;
@@ -101,15 +90,20 @@ export const handleWorkspaceDeletion = async (event: { data?: EventData }) => {
     closeProjectRooms(projects.map((project) => project.id));
 };
 
-export const handleWorkspaceMemberCreation = async (event: { data?: EventData }) => {
-    const { data } = event;
-    const role = toWorkspaceRole(data.role);
-    await prisma.workspaceMember.upsert({
-        where: { userId_workspaceId: { userId: data.user_id, workspaceId: data.organization_id } },
-        create: { userId: data.user_id, workspaceId: data.organization_id, role },
-        update: { role },
+// The membership can arrive before (or without) user.created: create the user from the membership's public data so the
+// membership can be saved. A later user.created/updated fills in the full record; this never overwrites one.
+const ensureUserFromMembership = async (user: EventData) => {
+    if (await prisma.user.findUnique({ where: { id: user.user_id }, select: { id: true } })) return;
+    // ON CONFLICT DO NOTHING: a user.created landing at the same moment wins, and nothing fails
+    await prisma.user.createMany({
+        data: {
+            id: user.user_id,
+            email: user.identifier,
+            name: displayName({ first_name: user.first_name, last_name: user.last_name, email_addresses: [{ email_address: user.identifier }] }),
+            image: user.image_url ?? "",
+        },
+        skipDuplicates: true,
     });
-    await invalidateWorkspace(data.organization_id);
 };
 
 // Clerk organizationMembership.created / .updated: { organization: { id }, public_user_data: { user_id }, role }
@@ -118,6 +112,7 @@ export const handleWorkspaceMemberChange = async (event: { data?: EventData }) =
     const workspaceId = data.organization.id;
     const userId = data.public_user_data.user_id;
     const role = toWorkspaceRole(data.role);
+    await ensureUserFromMembership(data.public_user_data);
     await prisma.workspaceMember.upsert({
         where: { userId_workspaceId: { userId, workspaceId } },
         create: { userId, workspaceId, role },
