@@ -5,8 +5,8 @@ import { Server } from "socket.io";
 import { appUrl } from "../configs/appUrl.js";
 import { logger } from "../configs/logger.js";
 import prisma from "../configs/prisma.js";
-import { uuid } from "../schemas/common.js";
-import { accessibleProjects, requireProjectAccess } from "../services/authorization.js";
+import { clerkId, uuid } from "../schemas/common.js";
+import { accessibleProjects, requireProjectAccess, requireWorkspaceMembership } from "../services/authorization.js";
 import { AppError } from "../utils/AppError.js";
 import { createRedisAdapter } from "./redisAdapter.js";
 
@@ -15,6 +15,8 @@ type JoinResult = { ok: true } | { ok: false; error: string };
 interface ClientToServerEvents {
     "project:join": (projectId: unknown, ack: (result: JoinResult) => void) => void;
     "project:leave": (projectId: unknown, ack: () => void) => void;
+    "workspace:join": (workspaceId: unknown, ack: (result: JoinResult) => void) => void;
+    "workspace:leave": (workspaceId: unknown, ack: () => void) => void;
 }
 
 // Same shapes as the REST responses for these writes
@@ -23,6 +25,8 @@ export interface ServerToClientEvents {
     "task:updated": (task: Task & { assignee: User | null }) => void;
     "tasks:deleted": (payload: { projectId: string; taskIds: string[] }) => void;
     "comment:created": (comment: Comment & { user: User }) => void;
+    // A notice, not data: clients refetch their workspace views (served from the cache)
+    "workspace:changed": (payload: { workspaceId: string }) => void;
 }
 
 export interface SocketData {
@@ -32,6 +36,7 @@ export interface SocketData {
 type RealtimeServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 export const projectRoom = (projectId: string) => `project:${projectId}`;
+export const workspaceRoom = (workspaceId: string) => `workspace:${workspaceId}`;
 const userRoom = (userId: string) => `user:${userId}`;
 
 // Set when the HTTP server starts; background jobs and tests without a server skip the socket side
@@ -50,17 +55,28 @@ const authenticate = async (token: unknown) => {
     }
 };
 
-const joinProject = async (userId: string, projectId: unknown): Promise<JoinResult> => {
-    const parsed = uuid.safeParse(projectId);
-    if (!parsed.success) return { ok: false, error: "Invalid project ID" };
+// Joining runs the same checks as the REST endpoints for that resource
+const authorizeJoin = async (room: string, check: () => Promise<unknown>, context: object): Promise<JoinResult> => {
     try {
-        await requireProjectAccess(parsed.data, userId);
+        await check();
         return { ok: true };
     } catch (err) {
         if (err instanceof AppError) return { ok: false, error: err.message };
-        logger.error({ err, userId, projectId }, "project:join failed");
+        logger.error({ err, ...context }, `${room}:join failed`);
         return { ok: false, error: "Something went wrong" };
     }
+};
+
+const joinProject = (userId: string, projectId: unknown): Promise<JoinResult> => {
+    const parsed = uuid.safeParse(projectId);
+    if (!parsed.success) return Promise.resolve({ ok: false, error: "Invalid project ID" });
+    return authorizeJoin("project", () => requireProjectAccess(parsed.data, userId), { userId, projectId });
+};
+
+const joinWorkspace = (userId: string, workspaceId: unknown): Promise<JoinResult> => {
+    const parsed = clerkId.safeParse(workspaceId);
+    if (!parsed.success) return Promise.resolve({ ok: false, error: "Invalid workspace ID" });
+    return authorizeJoin("workspace", () => requireWorkspaceMembership(parsed.data, userId), { userId, workspaceId });
 };
 
 // With Redis, broadcasts and room changes reach sockets on every API instance; without it, only this one
@@ -91,6 +107,17 @@ export const createRealtime = (httpServer: HttpServer, { redisUrl = process.env.
             if (typeof projectId === "string") await socket.leave(projectRoom(projectId));
             if (typeof ack === "function") ack();
         });
+
+        socket.on("workspace:join", async (workspaceId, ack) => {
+            const result = await joinWorkspace(userId, workspaceId);
+            if (result.ok) await socket.join(workspaceRoom(workspaceId as string));
+            if (typeof ack === "function") ack(result);
+        });
+
+        socket.on("workspace:leave", async (workspaceId, ack) => {
+            if (typeof workspaceId === "string") await socket.leave(workspaceRoom(workspaceId));
+            if (typeof ack === "function") ack();
+        });
     });
 
     current = io;
@@ -102,7 +129,12 @@ export const emitToProject = <E extends keyof ServerToClientEvents>(projectId: s
     current?.to(projectRoom(projectId)).emit(event, ...args);
 };
 
-// Called after a membership change: the user's sockets leave every project room in the workspace they can no longer access
+export const emitWorkspaceChanged = (workspaceId: string) => {
+    current?.to(workspaceRoom(workspaceId)).emit("workspace:changed", { workspaceId });
+};
+
+// Called after a membership change: the user's sockets leave every project room in the workspace they can no longer
+// access, and the workspace room itself once they're no longer a member
 export const revokeLostProjectAccess = async (userId: string, workspaceId: string) => {
     if (!current) return;
     const membership = await prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { role: true } });
@@ -112,6 +144,7 @@ export const revokeLostProjectAccess = async (userId: string, workspaceId: strin
     ]);
     const allowedIds = new Set(allowed.map((project) => project.id));
     const lost = all.filter((project) => !allowedIds.has(project.id)).map((project) => projectRoom(project.id));
+    if (!membership) lost.push(workspaceRoom(workspaceId));
     if (lost.length === 0) return;
     for (const target of everywhere(current, userRoom(userId))) target.socketsLeave(lost);
 };
@@ -121,9 +154,9 @@ export const disconnectUser = (userId: string) => {
     for (const target of everywhere(current, userRoom(userId))) target.disconnectSockets(true);
 };
 
-export const closeProjectRooms = (projectIds: string[]) => {
-    if (!current || projectIds.length === 0) return;
-    const rooms = projectIds.map(projectRoom);
+export const closeWorkspaceRooms = (workspaceId: string, projectIds: string[]) => {
+    if (!current) return;
+    const rooms = [workspaceRoom(workspaceId), ...projectIds.map(projectRoom)];
     for (const target of everywhere(current, rooms)) target.socketsLeave(rooms);
 };
 

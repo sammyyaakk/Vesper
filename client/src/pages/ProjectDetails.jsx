@@ -10,6 +10,7 @@ import ProjectSettings from "../components/ProjectSettings";
 import TaskFormDialog from "../components/TaskFormDialog";
 import ProjectCalendar from "../components/ProjectCalendar";
 import ProjectTasks from "../components/ProjectTasks";
+import { useWorkspaceChanged } from "../realtime/useWorkspaceRoom";
 
 export default function ProjectDetail() {
 
@@ -24,6 +25,8 @@ export default function ProjectDetail() {
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
     const [reloadKey, setReloadKey] = useState(0);
+    // Bumped by other people's changes: refreshes analytics and the calendar without resetting the live task list
+    const [liveKey, setLiveKey] = useState(0);
     const [showCreateTask, setShowCreateTask] = useState(false);
     const [activeTab, setActiveTab] = useState(tab || "tasks");
 
@@ -52,6 +55,11 @@ export default function ProjectDetail() {
         loadProject();
         dispatch(refreshWorkspace({ getToken }));
     }, [loadProject, dispatch, getToken]);
+
+    useWorkspaceChanged(() => {
+        loadProject();
+        setLiveKey((key) => key + 1);
+    });
 
     const handleTaskCreated = () => {
         setReloadKey((key) => key + 1);
@@ -161,12 +169,12 @@ export default function ProjectDetail() {
                     )}
                     {activeTab === "analytics" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectAnalytics projectId={id} project={project} reloadKey={reloadKey} />
+                            <ProjectAnalytics projectId={id} project={project} reloadKey={reloadKey + liveKey} />
                         </div>
                     )}
                     {activeTab === "calendar" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectCalendar projectId={id} reloadKey={reloadKey} />
+                            <ProjectCalendar projectId={id} reloadKey={reloadKey + liveKey} />
                         </div>
                     )}
                     {activeTab === "settings" && (
