@@ -44,7 +44,7 @@
     "@clerk/express": "^1.7.26",
     "@neondatabase/serverless": "^1.0.1",
     "@prisma/adapter-neon": "^6.15.0",
-    "@prisma/client": "^6.15.0",
+    "@prisma/client": "^7.10.0",
     "@socket.io/redis-adapter": "8.3.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
