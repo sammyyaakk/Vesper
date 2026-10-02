@@ -5,7 +5,7 @@ import type { CalendarQuery, TaskListQuery } from "../schemas/query.js";
 import { after, orderBy, toPage } from "../utils/pagination.js";
 import { requireProjectAccess, requireProjectManager, requireWorkspace, requireWorkspaceRole } from "./authorization.js";
 import { taskCountsByProject } from "./taskCounts.js";
-import { invalidateWorkspace } from "./workspaceCache.js";
+import { workspaceChanged } from "./workspaceChanges.js";
 
 export const create = async (userId: string, input: CreateProjectInput) => {
     const { workspaceId, description, name, status, startDate, endDate, teamMembers, teamLeadEmail, priority } = input;
@@ -41,7 +41,7 @@ export const create = async (userId: string, input: CreateProjectInput) => {
     await prisma.projectMember.createMany({
         data: memberIds.map((memberId) => ({ projectId: project.id, userId: memberId })),
     });
-    await invalidateWorkspace(workspaceId);
+    await workspaceChanged(workspaceId);
 
     return prisma.project.findUnique({
         where: { id: project.id },
@@ -69,7 +69,7 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
             endDate: endDate ?? null,
         },
     });
-    await invalidateWorkspace(project.workspaceId);
+    await workspaceChanged(project.workspaceId);
     return updated;
 };
 
@@ -87,7 +87,7 @@ export const addMember = async (userId: string, projectId: string, email: string
     const member = await prisma.projectMember.create({
         data: { userId: newMember.userId, projectId },
     });
-    await invalidateWorkspace(project.workspaceId);
+    await workspaceChanged(project.workspaceId);
     return member;
 };
 

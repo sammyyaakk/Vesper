@@ -4,7 +4,8 @@ import Sidebar from '../components/Sidebar'
 import { Outlet } from 'react-router-dom'
 import { CreateOrganization, SignIn, useAuth, useUser } from '@clerk/clerk-react'
 import { useDispatch, useSelector } from 'react-redux'
-import { fetchWorkspaces } from '../features/workspaceSlice'
+import { fetchWorkspaces, refreshWorkspace } from '../features/workspaceSlice'
+import { useWorkspaceChanged, useWorkspaceRoom } from '../realtime/useWorkspaceRoom'
 import { loadTheme } from '../features/themeSlice'
 import { Loader2Icon } from 'lucide-react'
 
@@ -36,9 +37,14 @@ function WorkspaceSetup({ getToken }) {
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const { user, isLoaded } = useUser()
-    const { workspaces, loading } = useSelector((state) => state.workspace)
+    const { workspaces, loading, currentWorkspace } = useSelector((state) => state.workspace)
     const { getToken } = useAuth()
     const dispatch = useDispatch()
+
+    // Live workspace: dashboard, project list, sidebar and team refetch when anyone changes the workspace
+    const refresh = () => dispatch(refreshWorkspace({ getToken }))
+    useWorkspaceRoom(currentWorkspace?.id, refresh)
+    useWorkspaceChanged(refresh)
 
     // Initial load of theme
     useEffect(() => {

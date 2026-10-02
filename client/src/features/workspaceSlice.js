@@ -27,11 +27,13 @@ export const fetchWorkspaces = createAsyncThunk("workspace/fetchWorkspaces", asy
     return workspaces;
 });
 
-// After any change, reload the counts and lists derived from it instead of patching them locally
+// After any change (ours or, via the workspace room, anyone else's), reload what it can affect instead of patching locally
 export const refreshWorkspace = createAsyncThunk("workspace/refreshWorkspace", async ({ getToken }, { getState }) => {
     const workspaceId = getState().workspace.currentWorkspace?.id;
     if (!workspaceId) return null;
-    return fetchWorkspaceData(workspaceId, await authHeaders(getToken));
+    const config = await authHeaders(getToken);
+    const [detail, data] = await Promise.all([api.get(`/api/workspaces/${workspaceId}`, config), fetchWorkspaceData(workspaceId, config)]);
+    return { workspace: { ...detail.data.workspace, role: detail.data.role }, ...data };
 });
 
 const initialState = {
@@ -64,7 +66,8 @@ const workspaceSlice = createSlice({
             state.summary = action.payload.summary;
         });
         builder.addCase(refreshWorkspace.fulfilled, (state, action) => {
-            if (!action.payload) return;
+            if (!action.payload || action.payload.workspace.id !== state.currentWorkspace?.id) return;
+            state.currentWorkspace = action.payload.workspace;
             state.projects = action.payload.projects;
             state.summary = action.payload.summary;
         });

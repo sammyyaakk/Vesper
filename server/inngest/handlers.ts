@@ -3,9 +3,9 @@ import type { WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import sendEmail from "../configs/nodemailer.js";
 import { assignmentEmail, reminderEmail } from "../emails/taskEmails.js";
-import { closeProjectRooms, disconnectUser, revokeLostProjectAccess } from "../realtime/index.js";
+import { closeWorkspaceRooms, disconnectUser, revokeLostProjectAccess } from "../realtime/index.js";
 import { removeFromWorkspace, removeUser } from "../services/userService.js";
-import { invalidateWorkspace } from "../services/workspaceCache.js";
+import { workspaceChanged } from "../services/workspaceChanges.js";
 import type { inngest } from "./index.js";
 
 export type Step = Pick<GetStepTools<typeof inngest>, "run" | "sleepUntil">;
@@ -37,7 +37,7 @@ const upsertUser = async (data: EventData) => {
         image: data?.image_url ?? "",
     };
     await prisma.user.upsert({ where: { id: data.id }, create: { id: data.id, ...fields }, update: fields });
-    await invalidateWorkspace(...(await workspaceIdsOf(data.id)));
+    await workspaceChanged(...(await workspaceIdsOf(data.id)));
 };
 
 export const handleUserCreation = (event: { data?: EventData }) => upsertUser(event.data);
@@ -45,7 +45,7 @@ export const handleUserCreation = (event: { data?: EventData }) => upsertUser(ev
 export const handleUserDeletion = async (event: { data?: EventData }) => {
     const workspaceIds = await workspaceIdsOf(event.data.id);
     await removeUser(event.data.id);
-    await invalidateWorkspace(...workspaceIds);
+    await workspaceChanged(...workspaceIds);
     disconnectUser(event.data.id);
 };
 
@@ -64,7 +64,7 @@ export const handleWorkspaceCreation = async (event: { data?: EventData }) => {
         create: { userId: data.created_by, workspaceId: data.id, role: "ADMIN" },
         update: { role: "ADMIN" },
     });
-    await invalidateWorkspace(data.id);
+    await workspaceChanged(data.id);
 };
 
 export const handleWorkspaceUpdation = async (event: { data?: EventData }) => {
@@ -79,15 +79,15 @@ export const handleWorkspaceUpdation = async (event: { data?: EventData }) => {
             imageUrl: data.image_url,
         },
     });
-    await invalidateWorkspace(data.id);
+    await workspaceChanged(data.id);
 };
 
 export const handleWorkspaceDeletion = async (event: { data?: EventData }) => {
     const { data } = event;
     const projects = await prisma.project.findMany({ where: { workspaceId: data.id }, select: { id: true } });
     await prisma.workspace.deleteMany({ where: { id: data.id } });
-    await invalidateWorkspace(data.id);
-    closeProjectRooms(projects.map((project) => project.id));
+    await workspaceChanged(data.id);
+    closeWorkspaceRooms(data.id, projects.map((project) => project.id));
 };
 
 // The membership can arrive before (or without) user.created: create the user from the membership's public data so the
@@ -118,7 +118,7 @@ export const handleWorkspaceMemberChange = async (event: { data?: EventData }) =
         create: { userId, workspaceId, role },
         update: { role },
     });
-    await invalidateWorkspace(workspaceId);
+    await workspaceChanged(workspaceId);
     await revokeLostProjectAccess(userId, workspaceId);
 };
 
@@ -127,7 +127,7 @@ export const handleWorkspaceMemberDeletion = async (event: { data?: EventData })
     const workspaceId = data.organization.id;
     const userId = data.public_user_data.user_id;
     await removeFromWorkspace(workspaceId, userId);
-    await invalidateWorkspace(workspaceId);
+    await workspaceChanged(workspaceId);
     await revokeLostProjectAccess(userId, workspaceId);
 };
 

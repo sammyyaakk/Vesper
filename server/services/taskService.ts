@@ -12,7 +12,7 @@ import {
     requireProjectManager,
     requireTaskAccess,
 } from "./authorization.js";
-import { invalidateWorkspace } from "./workspaceCache.js";
+import { workspaceChanged } from "./workspaceChanges.js";
 
 type TaskEvent =
     | { name: "app/task.assigned"; data: { taskId: string; assigneeId: string } }
@@ -60,7 +60,7 @@ export const create = async (userId: string, input: CreateTaskInput) => {
         },
     });
 
-    await invalidateWorkspace(project.workspaceId);
+    await workspaceChanged(project.workspaceId);
 
     const taskWithAssignee = await prisma.task.findUniqueOrThrow({
         where: { id: task.id },
@@ -88,7 +88,7 @@ export const update = async (userId: string, taskId: string, changes: UpdateTask
         data: { title, description, type, status, priority, assigneeId, dueDate },
         include: { assignee: true },
     });
-    await invalidateWorkspace(project.workspaceId);
+    await workspaceChanged(project.workspaceId);
     emitToProject(task.projectId, "task:updated", updated);
 
     const events: TaskEvent[] = [];
@@ -112,7 +112,7 @@ export const remove = async (userId: string, taskIds: string[]) => {
     }
 
     await prisma.task.deleteMany({ where: { id: { in: ids } } });
-    await invalidateWorkspace(...workspaceIds);
+    await workspaceChanged(...workspaceIds);
     for (const projectId of new Set(tasks.map((task) => task.projectId))) {
         emitToProject(projectId, "tasks:deleted", { projectId, taskIds: tasks.filter((task) => task.projectId === projectId).map((task) => task.id) });
     }

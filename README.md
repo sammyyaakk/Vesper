@@ -16,7 +16,7 @@ Vesper is a multi-tenant project management app. Teams work inside **workspaces*
 - Members can claim unassigned tasks and complete their own; leads and workspace admins manage everything
 - Due-date reminders that follow due-date changes (to the assignee, or the project lead if unassigned)
 - Dashboard, project analytics and calendar views; light/dark theme
-- **Live updates:** task and comment changes appear for everyone viewing the project, without reloading
+- **Live updates:** every screen (task lists, tasks and comments, dashboard, projects, team, analytics, calendar) updates for everyone in the workspace without reloading
 - Background jobs: Clerk → database sync, task-assignment email, due-date reminder
 - Per-user rate limits, and a Redis cache for the dashboard with explicit invalidation
 
@@ -125,11 +125,14 @@ The client opens one Socket.io connection (WebSocket only) per session, sending 
 |---|---|---|
 | client → server | `project:join` | project ID; acknowledged with `{ ok: true }` or `{ ok: false, error }` |
 | client → server | `project:leave` | project ID |
+| client → server | `workspace:join`, `workspace:leave` | workspace ID; join acknowledged like `project:join` |
 | server → client | `task:created`, `task:updated` | the task with its assignee (same as the REST response) |
 | server → client | `tasks:deleted` | `{ projectId, taskIds }`, one per project per bulk delete |
 | server → client | `comment:created` | the comment with its author |
+| server → client | `workspace:changed` | `{ workspaceId }`: a notice, not data; clients refetch their workspace views |
 
-- **Authorized rooms:** joining runs the same `requireProjectAccess` check as the REST API. Events go only to the project's room, after the database write succeeds.
+- **Workspace-wide updates:** every write that changes what members see goes through one function, `workspaceChanged()`, which invalidates the cache and notifies the workspace room. Clients wait for a burst to settle (500 ms) and refetch once, from the cache.
+- **Authorized rooms:** joining runs the same check as the REST API (`requireProjectAccess` for projects, workspace membership for workspaces). Events go only to the project's room, after the database write succeeds.
 - **Revocation is pushed:** when a member is removed or demoted, their sockets leave the rooms they lost; deleted users are disconnected; a deleted workspace's rooms are emptied. It's applied on the local instance without waiting for Redis, then relayed.
 - **Missed events:** delivery is at-most-once, so after a reconnect the client rejoins and refetches. Updates are applied by ID, so a user's own changes arriving back as events are harmless.
 - **Several API instances:** the Redis adapter relays broadcasts and room changes between them. WebSocket-only transport means no sticky sessions are needed. If Redis is down, events still reach clients on the same instance.
