@@ -15,6 +15,7 @@ const AddProjectMember = ({ isDialogOpen, setIsDialogOpen, project, onAdded }) =
     const projectMembersEmails = project?.members.map((member) => member.user.email);
 
     const [email, setEmail] = useState('');
+    const [role, setRole] = useState("CONTRIBUTOR");
     const [isAdding, setIsAdding] = useState(false);
 
     const handleSubmit = async (e) => {
@@ -22,7 +23,7 @@ const AddProjectMember = ({ isDialogOpen, setIsDialogOpen, project, onAdded }) =
         setIsAdding(true);
 
         try {
-            await api.post(`/api/projects/${project.id}/addMember`, { email }, { headers: { Authorization: `Bearer ${await getToken()}` } });
+            await api.post(`/api/projects/${project.id}/addMember`, { email, role }, { headers: { Authorization: `Bearer ${await getToken()}` } });
             toast.success("Added to project successfully");
             setIsDialogOpen(false);
             onAdded?.();
@@ -69,6 +70,15 @@ const AddProjectMember = ({ isDialogOpen, setIsDialogOpen, project, onAdded }) =
                                     ))}
                             </select>
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="project-role" className="text-sm font-medium text-zinc-900 dark:text-zinc-200">Role</label>
+                        <select id="project-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-200 text-sm py-2 px-3 focus:outline-none focus:border-blue-500">
+                            <option value="LEAD">Lead: manages the project and its tasks</option>
+                            <option value="CONTRIBUTOR">Contributor: creates and works on tasks</option>
+                            <option value="VIEWER">Viewer: reads and comments</option>
+                        </select>
                     </div>
 
                     {/* Footer */}

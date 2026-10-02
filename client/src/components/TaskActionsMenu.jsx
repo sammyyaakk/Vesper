@@ -79,9 +79,11 @@ export default function TaskActionsMenu({ onOpen, onEdit, onDelete, onClaim, onU
                             <UserMinus className="size-4" /> Unassign me
                         </button>
                     )}
-                    <button type="button" role="menuitem" onClick={() => run(onDelete)} className={`${itemClasses} text-red-600 dark:text-red-400`}>
-                        <Trash className="size-4" /> Delete task
-                    </button>
+                    {onDelete && (
+                        <button type="button" role="menuitem" onClick={() => run(onDelete)} className={`${itemClasses} text-red-600 dark:text-red-400`}>
+                            <Trash className="size-4" /> Delete task
+                        </button>
+                    )}
                 </div>
             )}
         </div>

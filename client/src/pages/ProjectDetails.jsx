@@ -11,6 +11,9 @@ import TaskFormDialog from "../components/TaskFormDialog";
 import ProjectCalendar from "../components/ProjectCalendar";
 import ProjectTasks from "../components/ProjectTasks";
 import { useWorkspaceChanged } from "../realtime/useWorkspaceRoom";
+import { useUser } from "@clerk/clerk-react";
+import { useSelector } from "react-redux";
+import { canContribute } from "../utils/permissions";
 
 export default function ProjectDetail() {
 
@@ -24,6 +27,8 @@ export default function ProjectDetail() {
 
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
+    const { user } = useUser();
+    const workspaceRole = useSelector((state) => state.workspace.currentWorkspace?.role);
     const [reloadKey, setReloadKey] = useState(0);
     // Bumped by other people's changes: refreshes analytics and the calendar without resetting the live task list
     const [liveKey, setLiveKey] = useState(0);
@@ -111,13 +116,13 @@ export default function ProjectDetail() {
                         </span>
                     </div>
                 </div>
-                <button
+                {canContribute(project, user?.id, workspaceRole) && <button
                     onClick={() => setShowCreateTask(true)}
                     className="flex items-center gap-2 px-5 py-2 text-sm rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white"
                 >
                     <PlusIcon className="size-4" />
                     New Task
-                </button>
+                </button>}
             </div>
 
             {/* Info Cards */}

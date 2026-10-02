@@ -1,4 +1,4 @@
-import type { Prisma, Task, WorkspaceRole } from "@prisma/client";
+import type { Prisma, ProjectRole, Task, WorkspaceRole } from "@prisma/client";
 import prisma from "../configs/prisma.js";
 import type { UpdateTaskInput } from "../schemas/task.js";
 import { AppError } from "../utils/AppError.js";
@@ -62,9 +62,13 @@ export const requireProject = async (projectId: string) => {
 export const isProjectMember = (project: ProjectWithMembers, userId: string) =>
     project.teamLead === userId || project.members.some((member) => member.userId === userId);
 
-// Managers are the project lead and admins of the project's own workspace
+// The named lead always counts as LEAD, even if their membership row were missing
+export const projectRoleOf = (project: ProjectWithMembers, userId: string): ProjectRole | null =>
+    project.teamLead === userId ? "LEAD" : (project.members.find((member) => member.userId === userId)?.role ?? null);
+
+// Managers are every LEAD of the project and admins of the project's own workspace
 const isProjectManager = async (project: ProjectWithMembers, userId: string) => {
-    if (project.teamLead === userId) return true;
+    if (projectRoleOf(project, userId) === "LEAD") return true;
     const membership = await prisma.workspaceMember.findUnique({
         where: { userId_workspaceId: { userId, workspaceId: project.workspaceId } },
         select: { role: true },
@@ -86,14 +90,16 @@ export const requireProjectAccess = async (projectId: string, userId: string) =>
     const project = await requireProject(projectId);
     const isManager = await isProjectManager(project, userId);
     if (!isManager && !isProjectMember(project, userId)) throw AppError.forbidden("You are not member of this project");
-    return { project, isManager };
+    // Viewers can read and comment; everyone else on the project can work on tasks
+    const canContribute = isManager || projectRoleOf(project, userId) === "CONTRIBUTOR";
+    return { project, isManager, canContribute };
 };
 
 export const requireTaskAccess = async (taskId: string, userId: string) => {
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw AppError.notFound("Task not found");
-    const { project, isManager } = await requireProjectAccess(task.projectId, userId);
-    return { task, project, isManager };
+    const { project, isManager, canContribute } = await requireProjectAccess(task.projectId, userId);
+    return { task, project, isManager, canContribute };
 };
 
 // DR-022: members may claim an unassigned task, unassign themselves, and change the status of their own tasks

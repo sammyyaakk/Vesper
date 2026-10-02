@@ -1,4 +1,4 @@
-import { Priority, ProjectStatus } from "@prisma/client";
+import { Priority, ProjectRole, ProjectStatus } from "@prisma/client";
 import { z } from "zod";
 import { clerkId, optionalDate, optionalText, uuid } from "./common.js";
 
@@ -33,7 +33,11 @@ export const updateProjectSchema = z
 
 export const projectParamsSchema = z.object({ projectId: uuid });
 
-export const addMemberSchema = z.object({ email: z.email("Must be a valid email") });
+export const addMemberSchema = z.object({ email: z.email("Must be a valid email"), role: z.enum(ProjectRole).optional() });
+
+export const memberParamsSchema = z.object({ projectId: uuid, userId: clerkId });
+
+export const setMemberRoleSchema = z.object({ role: z.enum(ProjectRole) });
 
 export type CreateProjectInput = z.output<typeof createProjectSchema>;
 export type UpdateProjectInput = z.output<typeof updateProjectSchema>;

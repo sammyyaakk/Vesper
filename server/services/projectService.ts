@@ -1,4 +1,5 @@
 import prisma from "../configs/prisma.js";
+import type { ProjectRole } from "@prisma/client";
 import type { CreateProjectInput, UpdateProjectInput } from "../schemas/project.js";
 import { AppError } from "../utils/AppError.js";
 import type { CalendarQuery, TaskListQuery } from "../schemas/query.js";
@@ -39,7 +40,7 @@ export const create = async (userId: string, input: CreateProjectInput) => {
     const memberIds = [...new Set([teamLead.userId, ...invitedIds])];
 
     await prisma.projectMember.createMany({
-        data: memberIds.map((memberId) => ({ projectId: project.id, userId: memberId })),
+        data: memberIds.map((memberId) => ({ projectId: project.id, userId: memberId, role: memberId === teamLead.userId ? ("LEAD" as const) : ("CONTRIBUTOR" as const) })),
     });
     await workspaceChanged(workspaceId);
 
@@ -73,7 +74,7 @@ export const update = async (userId: string, input: UpdateProjectInput) => {
     return updated;
 };
 
-export const addMember = async (userId: string, projectId: string, email: string) => {
+export const addMember = async (userId: string, projectId: string, email: string, role: ProjectRole = "CONTRIBUTOR") => {
     const project = await requireProjectManager(projectId, userId, AppError.forbidden("Only the project lead or a workspace admin can add members"));
     const workspace = await requireWorkspace(project.workspaceId);
 
@@ -85,10 +86,22 @@ export const addMember = async (userId: string, projectId: string, email: string
     }
 
     const member = await prisma.projectMember.create({
-        data: { userId: newMember.userId, projectId },
+        data: { userId: newMember.userId, projectId, role },
     });
     await workspaceChanged(project.workspaceId);
     return member;
+};
+
+// Leads and workspace admins set roles; the named lead stays a LEAD so every project keeps an accountable manager
+export const setMemberRole = async (userId: string, projectId: string, memberId: string, role: ProjectRole) => {
+    const project = await requireProjectManager(projectId, userId, AppError.forbidden("Only a project lead or a workspace admin can change roles"));
+    if (memberId === project.teamLead && role !== "LEAD") throw AppError.badRequest("The project's named lead must stay a lead");
+    const membership = project.members.find((member) => member.userId === memberId);
+    if (!membership) throw AppError.notFound("That user isn't a member of this project");
+
+    const updated = await prisma.projectMember.update({ where: { id: membership.id }, data: { role }, include: { user: true } });
+    await workspaceChanged(project.workspaceId);
+    return updated;
 };
 
 export const get = async (userId: string, projectId: string) => {

@@ -32,7 +32,8 @@ const formFromTask = (task) => ({
 export default function TaskFormDialog({ project, task, onClose, onSaved }) {
     const { getToken } = useAuth();
     const { user } = useUser();
-    const teamMembers = project?.members || [];
+    // Viewers can't be assigned tasks
+    const teamMembers = (project?.members || []).filter((member) => member.role !== "VIEWER");
     const isProjectMember = teamMembers.some((member) => member.user.id === user?.id);
     const isEdit = Boolean(task);
 

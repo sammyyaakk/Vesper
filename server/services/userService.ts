@@ -32,8 +32,8 @@ export const removeUser = (userId: string) =>
             await tx.project.update({ where: { id: project.id }, data: { teamLead: newLead } });
             await tx.projectMember.upsert({
                 where: { userId_projectId: { userId: newLead, projectId: project.id } },
-                create: { userId: newLead, projectId: project.id },
-                update: {},
+                create: { userId: newLead, projectId: project.id, role: "LEAD" },
+                update: { role: "LEAD" },
             });
         }
 
@@ -62,8 +62,8 @@ export const removeFromWorkspace = (workspaceId: string, userId: string) =>
                 await tx.project.update({ where: { id: projectId }, data: { teamLead: ownerId } });
                 await tx.projectMember.upsert({
                     where: { userId_projectId: { userId: ownerId, projectId } },
-                    create: { userId: ownerId, projectId },
-                    update: {},
+                    create: { userId: ownerId, projectId, role: "LEAD" },
+                    update: { role: "LEAD" },
                 });
             }
         }
