@@ -112,6 +112,14 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - if: env.DIRECT_URL != ''
         run: npm ci --ignore-scripts
-      - if: env.DIRECT_URL != ''
-        run: npx prisma migrate deploy
+      # Neon's free tier suspends an idle database, and the first connection can time out (P1001) while it wakes up
+      - name: Apply migrations (retries while the database wakes up)
+        if: env.DIRECT_URL != ''
+        run: |
+          for attempt in 1 2 3 4 5; do
+            npx prisma migrate deploy && exit 0
+            echo "::warning::Attempt $attempt failed; retrying in 10 s"
+            sleep 10
+          done
+          exit 1
 
